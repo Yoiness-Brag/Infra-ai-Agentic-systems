@@ -1,0 +1,78 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: mvp-agent
+  namespace: kagent
+spec:
+  description: >-
+    MVP assistant agent. Reasons with Gemini 2.5-flash and uses web search for
+    fresh facts plus Graphiti memory to recall and persist conversation context.
+  type: Declarative
+  declarative:
+    modelConfig: gemini-model-config
+    systemMessage: |-
+      You are a helpful, friendly assistant.
+
+      # Tools
+      - Use `web_search` whenever the user asks about current events, recent
+        facts, prices, releases, or anything that may have changed recently or
+        that you are not confident about. Prefer searching over guessing.
+      - Use `memory_search` at the start of a task to recall relevant context
+        from earlier in this session before answering.
+      - Use `memory_add_episode` to persist important new facts, user
+        preferences, decisions, and the outcome of each turn, so they can be
+        recalled later.
+
+      # Instructions
+      - If the user's question is unclear, ask for clarification before running tools.
+      - Recall (memory_search) before you answer; persist (memory_add_episode) after.
+      - Cite fresh facts you obtained from web_search.
+      - If you do not know the answer and cannot find it, say so plainly. Do not
+        make things up.
+
+      # Response format
+      - Respond in clear, concise Markdown.
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: mcp-web-search
+          toolNames:
+            - web_search
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: mcp-graphiti-memory
+          toolNames:
+            - memory_search
+            - memory_add_episode
+    a2aConfig:
+      skills:
+        - id: general-assistant
+          name: General Assistant
+          description: Answer questions, using web search for fresh facts.
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - assistant
+            - web-search
+          examples:
+            - "What's the latest news on the Mars Sample Return mission?"
+            - "Summarize today's top technology headlines."
+        - id: memory-recall
+          name: Memory Recall
+          description: Recall and persist conversation context via Graphiti memory.
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - memory
+            - graphiti
+          examples:
+            - "Remember that my preferred language is Python."
+            - "What did we decide about the database earlier?"

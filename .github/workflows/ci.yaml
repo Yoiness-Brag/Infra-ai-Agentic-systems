@@ -1,0 +1,121 @@
+name: infra-code-ci
+
+on:
+  pull_request:
+    paths:
+      - "infra-code/**"
+  push:
+    branches: [main, master]
+    paths:
+      - "infra-code/**"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: infra-code
+
+jobs:
+  images:
+    name: build + trivy (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [agent-backend, mcp-web-search, mcp-graphiti-memory]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (local, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: infra-code/services/${{ matrix.service }}
+          push: false
+          load: true
+          tags: mvp/${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: mvp/${{ matrix.service }}:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+  manifests:
+    name: helm lint + kustomize + kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Install kubeconform
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar xz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: kustomize build (every kustomization)
+        run: |
+          set -e
+          found=0
+          while IFS= read -r kfile; do
+            dir=$(dirname "$kfile")
+            echo "== kustomize build $dir =="
+            kustomize build "$dir" >/dev/null
+            found=1
+          done < <(find . -name kustomization.yaml)
+          [ "$found" = "1" ] || echo "no kustomizations found"
+
+      - name: kubeconform (foundation manifests, CRD-tolerant)
+        run: |
+          kustomize build platform/foundation \
+            | kubeconform -strict -ignore-missing-schemas -summary
+
+      - name: kubeconform (raw argocd Application/AppProject CRs)
+        run: |
+          kubeconform -ignore-missing-schemas -summary \
+            platform/argocd/root.yaml \
+            platform/argocd/project.yaml \
+            platform/argocd/applications/*.yaml
+
+      - name: helm lint (any charts present)
+        run: |
+          shopt -s nullglob
+          charts=$(find platform -name Chart.yaml -printf '%h\n')
+          if [ -z "$charts" ]; then
+            echo "no helm charts in infra-code — skipping helm lint"
+          else
+            for c in $charts; do echo "== helm lint $c =="; helm lint "$c"; done
+          fi
+
+  python:
+    name: ruff + mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff + mypy
+        run: pip install ruff mypy
+      - name: ruff check (eval)
+        run: ruff check eval
+      - name: mypy (eval)
+        run: mypy --ignore-missing-imports eval
+      - name: ruff check (services, best-effort)
+        run: ruff check services || true

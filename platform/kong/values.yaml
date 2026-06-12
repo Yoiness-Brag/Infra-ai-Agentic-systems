@@ -1,0 +1,85 @@
+image:
+  repository: kong
+  tag: "3.9"
+
+env:
+  database: "off"
+  declarative_config: /kong_dbless/kong.yaml
+  plugins: bundled
+
+deployment:
+  userDefinedVolumes:
+    - name: kong-declarative
+      configMap:
+        name: kong-declarative
+  userDefinedVolumeMounts:
+    - name: kong-declarative
+      mountPath: /kong_dbless
+      readOnly: true
+
+extraEnvVars:
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: jwt-secret
+        key: JWT_SECRET
+  - name: JWT_ISS
+    valueFrom:
+      secretKeyRef:
+        name: jwt-secret
+        key: JWT_ISS
+  - name: GOOGLE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: gemini-api
+        key: GOOGLE_API_KEY
+
+ingressController:
+  enabled: false
+
+proxy:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+  tls:
+    enabled: false
+  nameOverride: kong-proxy
+
+admin:
+  enabled: true
+  http:
+    enabled: true
+  type: ClusterIP
+
+status:
+  enabled: true
+  http:
+    enabled: true
+    containerPort: 8100
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8100"
+  prometheus.io/path: /metrics

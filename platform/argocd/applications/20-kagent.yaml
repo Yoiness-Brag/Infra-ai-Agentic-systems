@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: infra-ai-mvp
+  source:
+    repoURL: https://github.com/YounssBrag/Infra-ai-Agentic-systems.git
+    targetRevision: HEAD
+    path: infra-code/platform/kagent
+    directory:
+      recurse: false
+      include: "{model-config.yaml,remote-mcp-web-search.yaml,remote-mcp-graphiti-memory.yaml,networkpolicy.yaml}"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,18 @@
+[project]
+name = "infra-ai-mvp-eval"
+version = "0.1.0"
+description = "Simple golden-set + Gemini LLM-as-judge eval for the infra-ai MVP (SPEC §13)."
+requires-python = ">=3.11"
+# run_eval.py intentionally uses only the Python stdlib (urllib/json/hmac) so it runs in CI
+# and locally with zero install. No runtime deps required.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff>=0.6"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

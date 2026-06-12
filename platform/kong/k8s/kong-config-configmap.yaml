@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-declarative
+  namespace: ai-gateway
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+    app.kubernetes.io/name: kong
+data:
+  kong.yaml: |
+    _format_version: "3.0"
+    _transform: true
+    consumers:
+      - username: mvp-app
+        jwt_secrets:
+          - key: mvp-app
+            algorithm: HS256
+            secret: "${JWT_SECRET}"
+    services:
+      - name: agent-backend
+        url: http://agent-backend.ai-platform:8000
+        routes:
+          - name: chat
+            paths:
+              - /chat
+            strip_path: true
+            protocols:
+              - http
+            methods:
+              - POST
+              - GET
+              - OPTIONS
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify:
+                - exp
+              header_names:
+                - authorization
+          - name: rate-limiting
+            config:
+              minute: 60
+              policy: local
+              limit_by: consumer
+              fault_tolerant: true
+          - name: prometheus
+            config:
+              per_consumer: true
+              status_code_metrics: true
+              latency_metrics: true
+              bandwidth_metrics: true
+      - name: gemini-egress
+        url: http://localhost:32000
+        routes:
+          - name: llm-gemini
+            paths:
+              - /llm/gemini
+            strip_path: true
+            protocols:
+              - http
+            methods:
+              - POST
+              - OPTIONS
+        plugins:
+          - name: ai-proxy
+            config:
+              route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: "{vault://env/GOOGLE_API_KEY}"
+                param_location: query
+              model:
+                provider: gemini
+                name: gemini-2.5-flash
+          - name: prometheus
+            config:
+              status_code_metrics: true
+              latency_metrics: true
+              ai_metrics: true
+    plugins:
+      - name: prometheus
+        config:
+          status_code_metrics: true
+          latency_metrics: true

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-backend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: agent-backend
+    app.kubernetes.io/part-of: infra-ai-mvp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-backend
+        app.kubernetes.io/part-of: infra-ai-mvp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: agent-backend
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-backend
+          image: mvp/agent-backend:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: KAGENT_AGENT_A2A_URL
+              value: "http://kagent-controller.kagent:8083/api/a2a/kagent/mvp-agent/"
+            - name: JWT_ISS
+              value: "mvp-app"
+            - name: POSTGRES_HOST
+              value: "postgres.ai-platform"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: FALKORDB_HOST
+              value: "falkordb.ai-platform"
+            - name: FALKORDB_PORT
+              value: "6379"
+          envFrom:
+            - secretRef:
+                name: jwt-secret
+            - secretRef:
+                name: postgres-creds
+            - secretRef:
+                name: falkordb-auth
+                optional: true
+            - secretRef:
+                name: gemini-api
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30

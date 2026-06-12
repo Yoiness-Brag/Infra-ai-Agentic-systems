@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-graphiti-memory
+  namespace: ai-platform
+  labels:
+    app: mcp-graphiti-memory
+    component: mcp-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-graphiti-memory
+  template:
+    metadata:
+      labels:
+        app: mcp-graphiti-memory
+        component: mcp-tool
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp-graphiti-memory
+          image: mvp/mcp-graphiti-memory:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3002
+          env:
+            - name: PORT
+              value: "3002"
+            - name: HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
+            - name: FALKORDB_HOST
+              value: "falkordb.ai-platform"
+            - name: FALKORDB_PORT
+              value: "6379"
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-api
+                  key: GOOGLE_API_KEY
+            - name: FALKORDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: falkordb-auth
+                  key: FALKORDB_PASSWORD
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            tcpSocket:
+              port: 3002
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: 3002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-graphiti-memory
+  namespace: ai-platform
+  labels:
+    app: mcp-graphiti-memory
+spec:
+  selector:
+    app: mcp-graphiti-memory
+  ports:
+    - name: http
+      port: 3002
+      targetPort: 3002
+      protocol: TCP

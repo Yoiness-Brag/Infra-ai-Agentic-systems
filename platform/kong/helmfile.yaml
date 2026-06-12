@@ -1,0 +1,12 @@
+repositories:
+  - name: kong
+    url: https://charts.konghq.com
+
+releases:
+  - name: kong
+    namespace: ai-gateway
+    createNamespace: false
+    chart: kong/kong
+    version: "{{ env \"KONG_CHART_VERSION\" | default \"2.51.0\" }}"
+    values:
+      - values.yaml

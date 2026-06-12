@@ -1,0 +1,25 @@
+repositories:
+  - name: kagent
+    url: oci://ghcr.io/kagent-dev/kagent/helm
+    oci: true
+
+releases:
+  - name: kagent-crds
+    namespace: kagent
+    createNamespace: true
+    chart: oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds
+    version: "{{ env \"CHART_VERSION\" | default \"0.6.21\" }}"
+    installed: true
+
+  - name: kagent
+    namespace: kagent
+    createNamespace: true
+    chart: oci://ghcr.io/kagent-dev/kagent/helm/kagent
+    version: "{{ env \"CHART_VERSION\" | default \"0.6.21\" }}"
+    needs:
+      - kagent/kagent-crds
+    values:
+      - values.yaml
+    set:
+      - name: providers.gemini.apiKey
+        value: "{{ requiredEnv \"GOOGLE_API_KEY\" }}"

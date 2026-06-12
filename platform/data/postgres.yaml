@@ -1,0 +1,164 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: ai-platform
+data:
+  01-sessions.sql: |
+    -- SPEC §9: sessions(session_id uuid pk, app text, subject text, created_at, last_seen, meta jsonb)
+    CREATE TABLE IF NOT EXISTS sessions (
+        session_id  uuid        PRIMARY KEY,
+        app         text        NOT NULL,
+        subject     text        NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        last_seen   timestamptz NOT NULL DEFAULT now(),
+        meta        jsonb       NOT NULL DEFAULT '{}'::jsonb
+    );
+
+    -- Lookup helpers for the agent-backend's per-app / per-subject queries.
+    CREATE INDEX IF NOT EXISTS idx_sessions_app        ON sessions (app);
+    CREATE INDEX IF NOT EXISTS idx_sessions_subject    ON sessions (subject);
+    CREATE INDEX IF NOT EXISTS idx_sessions_last_seen  ON sessions (last_seen DESC);
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: session-store
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: session-store
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app: postgres
+        app.kubernetes.io/part-of: ai-platform
+        app.kubernetes.io/component: session-store
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:16.4-bookworm
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: postgres-creds
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1'
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1'
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/part-of: ai-platform
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow-ingress
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-backend
+      ports:
+        - protocol: TCP
+          port: 5432

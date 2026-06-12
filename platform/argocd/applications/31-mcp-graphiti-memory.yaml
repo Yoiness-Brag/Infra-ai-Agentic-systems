@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mcp-graphiti-memory
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: infra-ai-mvp
+  source:
+    repoURL: https://github.com/YounssBrag/Infra-ai-Agentic-systems.git
+    targetRevision: HEAD
+    path: infra-code/services/mcp-graphiti-memory/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
