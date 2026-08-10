@@ -41,7 +41,7 @@ python3 run_eval.py
 
 ## Judge
 
-Each case is scored by `gemini-2.5-flash` (override with `GEMINI_MODEL`) against the case's
+Each case is scored by `gemini-3.5-flash` (override with `GEMINI_MODEL`) against the case's
 `expected` answer and `rubric`. The per-case score is the mean of `correctness` and
 `faithfulness`; the suite score is the mean across cases.
 

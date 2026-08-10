@@ -13,7 +13,7 @@ FastMCP **STREAMABLE_HTTP** server wrapping **Graphiti-on-FalkorDB** (Gemini LLM
 | Transport | `STREAMABLE_HTTP` |
 | Image | `mvp/mcp-graphiti-memory:dev` |
 | Backend | FalkorDB `falkordb.ai-platform:6379` |
-| LLM / embedder | Gemini `gemini-2.5-flash` / `gemini-embedding-001` |
+| LLM / embedder | Gemini `gemini-3.5-flash` / `gemini-embedding-001` |
 
 `group_id` partitions memory per session (SPEC §9: `group_id == session_id`).
 
@@ -48,7 +48,7 @@ the pod by design.
 | `FALKORDB_HOST` | `falkordb.ai-platform` | env | |
 | `FALKORDB_PORT` | `6379` | env | |
 | `FALKORDB_PASSWORD` | _(none)_ | `falkordb-auth` Secret (optional) | optional per SPEC §6 |
-| `GEMINI_LLM_MODEL` | `gemini-2.5-flash` | env | |
+| `GEMINI_LLM_MODEL` | `gemini-3.5-flash` | env | |
 | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | env | |
 | `SEARCH_NUM_RESULTS` | `10` | env | search result cap |
 | `PORT` | `3002` | env | listen port |

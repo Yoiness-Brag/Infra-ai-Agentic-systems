@@ -10,7 +10,7 @@
 
 Demonstrate, on a local **k3d** cluster managed by **ArgoCD**, a working agent that:
 - is fronted by **Kong AI Gateway** (JWT auth + rate-limit + Gemini egress via `ai-proxy-advanced`),
-- runs its reasoning on a **kagent `Agent`** (Gemini 2.5-flash) with **2 MCP tools** (web-search +
+- runs its reasoning on a **kagent `Agent`** (Gemini 3.5-flash) with **2 MCP tools** (web-search +
   graphiti-memory),
 - is driven by a **FastAPI agent-backend** that owns auth, **session IDs in Postgres**, and
   **session memory as Graphiti episodes in FalkorDB**, delegating the loop to the kagent Agent over **A2A**,
@@ -75,7 +75,7 @@ No `""`/`postgres`/default fallbacks.
 
 ## 8. Gemini routing
 
-kagent `ModelConfig` provider `Gemini`, model `gemini-2.5-flash`, key from `gemini-api`. **Egress through
+kagent `ModelConfig` provider `Gemini`, model `gemini-3.5-flash`, key from `gemini-api`. **Egress through
 Kong `ai-proxy`** (OSS; route `/llm/gemini` → Gemini upstream) to keep the gateway central
 (ADR-0012; Enterprise `ai-proxy-advanced` not used — see §16). Graphiti (in the memory MCP) uses Gemini
 embedder `gemini-embedding-001` directly (MVP deviation from self-hosted bge-large).
@@ -92,7 +92,7 @@ embedder `gemini-embedding-001` directly (MVP deviation from self-hosted bge-lar
 ## 10. kagent objects (v1alpha2 — confirm shapes via context7 `/websites/kagent_dev` at build)
 
 - Install: `helm install kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent -n kagent` (+ CRDs chart).
-- `ModelConfig` `gemini-model-config` (provider Gemini, model gemini-2.5-flash, apiKeySecret `gemini-api`).
+- `ModelConfig` `gemini-model-config` (provider Gemini, model gemini-3.5-flash, apiKeySecret `gemini-api`).
 - `RemoteMCPServer` ×2 → `mcp-web-search` and `mcp-graphiti-memory` (`protocol: STREAMABLE_HTTP`, the URLs in §4).
 - `Agent` `mvp-agent` (`type: Declarative`): `systemMessage`, `modelConfig: gemini-model-config`,
   `tools: [{type: McpServer, mcpServer:{kind: RemoteMCPServer, name: <each>, toolNames:[...]}}]`,

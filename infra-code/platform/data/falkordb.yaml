@@ -54,7 +54,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: falkordb
-          image: falkordb/falkordb:v4.2.2
+          image: falkordb/falkordb:v4.20.2
           imagePullPolicy: IfNotPresent
           env:
             - name: FALKORDB_PASSWORD
@@ -72,7 +72,7 @@ spec:
                 --appendfilename appendonly.aof --dbfilename dump.rdb
                 --save 900 1 --save 300 10
                 --maxmemory 512mb --maxmemory-policy noeviction
-                --loadmodule /FalkorDB/bin/src/falkordb.so
+                --loadmodule /var/lib/falkordb/bin/falkordb.so
                 THREAD_COUNT 2 CACHE_SIZE 25
                 MAX_QUEUED_QUERIES 25 TIMEOUT 1000 RESULTSET_SIZE 10000"
               if [ -n "$FALKORDB_PASSWORD" ]; then

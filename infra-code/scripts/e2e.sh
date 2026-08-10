@@ -54,17 +54,24 @@ for dep in postgres falkordb minio; do
   echo "$rz" | grep -q "\"$dep\": *\"ok\"" && ok "dependency $dep = ok" || no "dependency $dep not ok"
 done
 
-card=$(kubectl -n ai-platform exec deploy/agent-backend -- python - <<'PY' 2>/dev/null
-import json,urllib.request
-base="http://kagent-controller.kagent:8083/api/a2a/kagent/mvp-agent/"
-for p in (".well-known/agent-card.json",".well-known/agent.json"):
+BPOD=$(kubectl -n ai-platform get pod -l app.kubernetes.io/name=agent-backend \
+        --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+cat > /tmp/_card.py <<'PYEOF'
+import json, urllib.request
+base = "http://kagent-controller.kagent:8083/api/a2a/kagent/mvp-agent/"
+for p in (".well-known/agent-card.json", ".well-known/agent.json"):
     try:
-        d=json.load(urllib.request.urlopen(base+p,timeout=8))
-        print(p, d.get("name","?"), len(d.get("skills",[])), "skills"); break
-    except Exception: pass
-else: print("NONE")
-PY
-)
+        d = json.load(urllib.request.urlopen(base + p, timeout=10))
+        if isinstance(d, dict) and d.get("name"):
+            print(f'{p} name={d["name"]} skills={len(d.get("skills", []))}')
+            break
+    except Exception:
+        pass
+else:
+    print("NONE")
+PYEOF
+kubectl -n ai-platform cp /tmp/_card.py "$BPOD:/tmp/_card.py" >/dev/null 2>&1
+card=$(kubectl -n ai-platform exec "$BPOD" -- python /tmp/_card.py 2>/dev/null | tail -1)
 [ "$card" != "NONE" ] && [ -n "$card" ] && ok "A2A Agent Card discovered: $card" || no "A2A Agent Card not reachable"
 
 if [ -n "$TOKEN" ]; then
@@ -191,15 +198,20 @@ ds=$(curl -s --max-time 15 "$GRAFANA_URL/api/datasources" 2>/dev/null)
 echo "$ds" | grep -q prometheus && ok "Grafana has the Prometheus datasource" || sk "datasource list needs auth"
 echo "$ds" | grep -q loki && ok "Grafana has the Loki datasource" || sk "loki datasource not listed"
 
-lok=$(kubectl -n ai-observability exec statefulset/loki -- \
-      wget -qO- 'http://localhost:3100/loki/api/v1/label/namespace/values' 2>/dev/null)
+# Loki ships a distroless image with no shell, so probe it over a port-forward
+# rather than kubectl exec (an exec here fails with "sh: not found" and silently
+# reads as "no logs").
+kubectl -n ai-observability port-forward statefulset/loki 3100:3100 >/dev/null 2>&1 &
+LOKI_PF=$!; sleep 4
+lok=$(curl -s --max-time 15 'http://localhost:3100/loki/api/v1/label/namespace/values' 2>/dev/null)
 echo "$lok" | grep -q 'ai-platform' \
-  && ok "Loki is ingesting logs (namespaces: $(echo "$lok" | head -c 120))" \
-  || no "Loki has no ai-platform logs yet"
+  && ok "Loki is ingesting logs (namespaces: $(echo "$lok" | head -c 130))" \
+  || no "Loki has no ai-platform logs: $(echo "$lok" | head -c 130)"
 
-q=$(kubectl -n ai-observability exec statefulset/loki -- sh -c \
-     'wget -qO- --header="Content-Type: application/json" "http://localhost:3100/loki/api/v1/query_range?query=%7Bnamespace%3D%22ai-platform%22%7D&limit=5"' 2>/dev/null)
+q=$(curl -s --max-time 20 -G 'http://localhost:3100/loki/api/v1/query_range' \
+      --data-urlencode 'query={namespace="ai-platform"}' --data-urlencode 'limit=5' 2>/dev/null)
 echo "$q" | grep -q '"values"' && ok "LogQL query returns backend log lines" || no "LogQL returned nothing"
+kill $LOKI_PF 2>/dev/null; wait $LOKI_PF 2>/dev/null || true
 
 c=$(code "$MINIO_URL"); [ "$c" = 200 ] || [ "$c" = 403 ] || [ "$c" = 307 ] \
   && ok "MinIO console reachable ($c)" || no "MinIO console -> $c"

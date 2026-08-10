@@ -48,7 +48,7 @@ FALKORDB_HOST = os.getenv("FALKORDB_HOST", "falkordb.ai-platform")
 FALKORDB_PORT = int(os.getenv("FALKORDB_PORT", "6379"))
 FALKORDB_PASSWORD = os.getenv("FALKORDB_PASSWORD") or None
 
-GEMINI_LLM_MODEL = os.getenv("GEMINI_LLM_MODEL", "gemini-2.5-flash")
+GEMINI_LLM_MODEL = os.getenv("GEMINI_LLM_MODEL", "gemini-3.5-flash")
 GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 SEARCH_NUM_RESULTS = max(1, min(int(os.getenv("SEARCH_NUM_RESULTS", "10")), 50))
 OP_TIMEOUT = float(os.getenv("GRAPHITI_OP_TIMEOUT", "60.0"))

@@ -16,7 +16,7 @@ Env:
   JWT_SECRET      Used only if JWT is unset (local HS256 mint, iss=mvp-app).
   GOOGLE_API_KEY  Gemini key for the judge (required to score; otherwise skip with code 2).
   KONG_URL        Defaults to http://localhost:8080.
-  GEMINI_MODEL    Judge model, defaults to gemini-2.5-flash.
+  GEMINI_MODEL    Judge model, defaults to gemini-3.5-flash.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ GOLDEN = os.path.join(HERE, "golden.jsonl")
 
 KONG_URL = os.environ.get("KONG_URL", "http://localhost:8080").rstrip("/")
 CHAT_URL = f"{KONG_URL}/chat"
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 PASS_GATE = 0.8
 HTTP_TIMEOUT = 60
 JWT_ISS = "mvp-app"

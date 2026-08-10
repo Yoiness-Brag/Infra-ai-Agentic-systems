@@ -48,17 +48,12 @@ spec:
       terminationGracePeriodSeconds: 20
       securityContext:
         runAsNonRoot: true
-        runAsUser: 999
-        runAsGroup: 999
-        fsGroup: 999
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: browser
-          image: falkordb/falkordb:v4.2.2
+          image: falkordb/falkordb-browser:v2.3.2
           imagePullPolicy: IfNotPresent
-          workingDir: /FalkorDBBrowser
-          command: ["node", "server.js"]
           env:
             - name: HOSTNAME
               value: "0.0.0.0"
@@ -68,8 +63,13 @@ spec:
               value: /tmp
             - name: NEXT_TELEMETRY_DISABLED
               value: "1"
-            - name: FALKORDB_URL
-              value: "falkordb://falkordb.ai-platform:6379"
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: JWT_SECRET
+            - name: NEXTAUTH_URL
+              value: "http://localhost:3002"
           ports:
             - name: http
               containerPort: 3000
@@ -93,7 +93,6 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
             runAsNonRoot: true
-            runAsUser: 999
             capabilities:
               drop: ["ALL"]
           volumeMounts:

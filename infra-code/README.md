@@ -45,7 +45,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     client["Client<br/>Bearer JWT"]
-    gemini["Google Gemini API<br/>gemini-2.5-flash<br/>gemini-embedding-001"]
+    gemini["Google Gemini API<br/>gemini-3.5-flash<br/>gemini-embedding-001"]
 
     subgraph gw["ai-gateway (L1)"]
         kong["Kong AI Gateway<br/>jwt - rate-limiting - ai-proxy - prometheus<br/>:8000"]
@@ -102,7 +102,7 @@ Prometheus scrapes metrics; Grafana visualizes them.
 | L4 Sessions | Postgres | postgres 16 | `ai-platform` | 5432 |
 | L7 Metrics | Prometheus | prom/prometheus v2.54 | `ai-observability` | 9090 |
 | L7 Dashboards | Grafana | grafana 11 | `ai-observability` | 3000 |
-| LLM | Gemini | google-genai (gemini-2.5-flash + gemini-embedding-001) | external | 443 |
+| LLM | Gemini | google-genai (gemini-3.5-flash + gemini-embedding-001) | external | 443 |
 | GitOps / CI | ArgoCD + GitHub Actions | App-of-Apps, Trivy, kubeconform | `argocd` | - |
 | Cluster | K3s via k3d | single-node, Traefik disabled | - | host 8080 -> 80 |
 

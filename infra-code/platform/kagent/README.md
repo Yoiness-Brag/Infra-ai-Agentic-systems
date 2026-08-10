@@ -14,7 +14,7 @@ All CRs use `apiVersion: kagent.dev/v1alpha2` (confirmed via context7
 | `install.md` | — | Install runbook (charts, versions, secret wiring, verify). |
 | `helmfile.yaml` | — | Declarative install of `kagent-crds` + `kagent` charts. |
 | `values.yaml` | — | Helm values: Gemini default provider; key injected at install from `gemini-api`. |
-| `model-config.yaml` | `ModelConfig/gemini-model-config` | Gemini `gemini-2.5-flash`; key from Secret `gemini-api`/`GOOGLE_API_KEY`. |
+| `model-config.yaml` | `ModelConfig/gemini-model-config` | Gemini `gemini-3.5-flash`; key from Secret `gemini-api`/`GOOGLE_API_KEY`. |
 | `remote-mcp-web-search.yaml` | `RemoteMCPServer/mcp-web-search` | `STREAMABLE_HTTP` → `http://mcp-web-search.ai-platform:3001/mcp`. |
 | `remote-mcp-graphiti-memory.yaml` | `RemoteMCPServer/mcp-graphiti-memory` | `STREAMABLE_HTTP` → `http://mcp-graphiti-memory.ai-platform:3002/mcp`. |
 | `agent.yaml` | `Agent/mvp-agent` | Declarative agent; Gemini + 2 MCP tools; A2A skills. |

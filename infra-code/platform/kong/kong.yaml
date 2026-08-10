@@ -129,7 +129,7 @@ services:
                 param_location: query
               model:
                 provider: gemini
-                name: gemini-2.5-flash
+                name: gemini-3.5-flash
               logging:
                 log_statistics: true
                 log_payloads: false

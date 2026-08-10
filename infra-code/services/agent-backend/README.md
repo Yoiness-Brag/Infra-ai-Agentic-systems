@@ -54,7 +54,7 @@ Optional / defaulted:
 | `POSTGRES_DB` | `agentmvp` | |
 | `FALKORDB_HOST` / `FALKORDB_PORT` | `falkordb.ai-platform` / `6379` | |
 | `FALKORDB_PASSWORD` | `""` | Optional (SPEC §6) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Graphiti LLM model |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Graphiti LLM model |
 | `GEMINI_EMBEDDING_MODEL` | `embedding-001` | Graphiti embedder |
 | `A2A_TIMEOUT_SECONDS` | `60` | Per-call A2A timeout |
 | `A2A_MAX_RETRIES` | `2` | Retries on transient A2A failure |

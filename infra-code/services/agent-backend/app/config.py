@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     falkordb_password: str = Field(default="", alias="FALKORDB_PASSWORD")
 
     google_api_key: str = Field(alias="GOOGLE_API_KEY")
-    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.5-flash", alias="GEMINI_MODEL")
     gemini_embedding_model: str = Field(
         default="gemini-embedding-001", alias="GEMINI_EMBEDDING_MODEL"
     )

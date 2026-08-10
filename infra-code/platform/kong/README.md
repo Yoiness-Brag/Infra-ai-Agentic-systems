@@ -81,7 +81,7 @@ written into these committed files.
 |---|---|---|---|
 | Auth | `jwt` | **OSS / free** | — |
 | Rate limit | `rate-limiting` (`policy: local`, `limit_by: consumer`, 60/min) | **OSS / free** | `ai-rate-limiting-advanced` is **Enterprise-only** |
-| LLM egress | `ai-proxy` (provider `gemini`, `gemini-2.5-flash`, API key in query) | **OSS / free** (bundled in Kong 3.6+ AI Gateway) | `ai-proxy-advanced` (multi-target/load-balance/semantic routing) is **Enterprise-only** |
+| LLM egress | `ai-proxy` (provider `gemini`, `gemini-3.5-flash`, API key in query) | **OSS / free** (bundled in Kong 3.6+ AI Gateway) | `ai-proxy-advanced` (multi-target/load-balance/semantic routing) is **Enterprise-only** |
 | Metrics | `prometheus` | **OSS / free** | — |
 
 **Deviation note vs SPEC §7/§8:** the SPEC mentions `ai-rate-limiting-advanced` and
@@ -94,7 +94,7 @@ rate limiting and multi-model routing.
 
 ## Gemini egress route (SPEC §8)
 
-`POST /llm/gemini` → `ai-proxy` plugin → Gemini `gemini-2.5-flash`, `route_type:
+`POST /llm/gemini` → `ai-proxy` plugin → Gemini `gemini-3.5-flash`, `route_type:
 llm/v1/chat`. Auth = `GOOGLE_API_KEY` (from the `gemini-api` Secret) sent as the `key`
 query param. Keeps all LLM traffic flowing through the gateway (ADR-0012). kagent's
 `ModelConfig` points its Gemini egress at this Kong route rather than calling Google
