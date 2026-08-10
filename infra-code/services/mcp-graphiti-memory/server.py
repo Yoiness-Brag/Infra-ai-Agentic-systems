@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from graphiti_core import Graphiti
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
+from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
 from graphiti_core.llm_client.gemini_client import GeminiClient, LLMConfig
 from graphiti_core.nodes import EpisodeType
 from mcp.server.fastmcp import FastMCP
@@ -81,6 +82,9 @@ def _build_client() -> Graphiti:
             config=GeminiEmbedderConfig(
                 api_key=GOOGLE_API_KEY, embedding_model=GEMINI_EMBED_MODEL
             )
+        ),
+        cross_encoder=GeminiRerankerClient(
+            config=LLMConfig(api_key=GOOGLE_API_KEY, model=GEMINI_LLM_MODEL)
         ),
     )
 

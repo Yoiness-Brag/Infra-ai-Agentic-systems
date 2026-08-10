@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from graphiti_core import Graphiti
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
+from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
 from graphiti_core.llm_client.gemini_client import GeminiClient, LLMConfig
 from graphiti_core.nodes import EpisodeType
 
@@ -68,6 +69,9 @@ class MemoryStore:
                         api_key=s.google_api_key,
                         embedding_model=s.gemini_embedding_model,
                     )
+                ),
+                cross_encoder=GeminiRerankerClient(
+                    config=LLMConfig(api_key=s.google_api_key, model=s.gemini_model)
                 ),
             )
             await asyncio.wait_for(
