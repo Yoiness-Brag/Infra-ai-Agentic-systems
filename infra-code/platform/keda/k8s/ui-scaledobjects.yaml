@@ -1,0 +1,46 @@
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: pgadmin
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  scaleTargetRef:
+    name: pgadmin
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  pollingInterval: 30
+  cooldownPeriod: 120
+  triggers:
+    - type: cron
+      metadata:
+        timezone: Etc/UTC
+        start: "0 6 * * *"
+        end: "0 20 * * *"
+        desiredReplicas: "1"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: falkordb-browser
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: falkordb-browser
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  scaleTargetRef:
+    name: falkordb-browser
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  pollingInterval: 30
+  cooldownPeriod: 120
+  triggers:
+    - type: cron
+      metadata:
+        timezone: Etc/UTC
+        start: "0 6 * * *"
+        end: "0 20 * * *"
+        desiredReplicas: "1"

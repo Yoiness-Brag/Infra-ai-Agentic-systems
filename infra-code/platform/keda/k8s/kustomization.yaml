@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: ai-platform
 resources:
   - scaledobject.yaml
+  - ui-scaledobjects.yaml

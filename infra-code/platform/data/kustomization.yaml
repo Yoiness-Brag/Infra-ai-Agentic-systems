@@ -7,4 +7,5 @@ resources:
   - postgres.yaml
   - falkordb.yaml
   - minio.yaml
+  - falkordb-browser.yaml
   - pgadmin.yaml

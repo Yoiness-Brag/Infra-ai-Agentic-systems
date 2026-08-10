@@ -113,30 +113,6 @@ data:
       }
     }
 
-    otelcol.receiver.otlp "default" {
-      grpc {
-        endpoint = "0.0.0.0:4317"
-      }
-      http {
-        endpoint = "0.0.0.0:4318"
-      }
-      output {
-        traces = [otelcol.processor.batch.default.input]
-      }
-    }
-
-    otelcol.processor.batch "default" {
-      send_batch_size     = 1024
-      send_batch_max_size = 2048
-      timeout             = "2s"
-      output {
-        traces = [otelcol.exporter.debug.default.input]
-      }
-    }
-
-    otelcol.exporter.debug "default" {
-      verbosity = "basic"
-    }
 ---
 apiVersion: v1
 kind: Service
@@ -150,14 +126,6 @@ spec:
   selector:
     app.kubernetes.io/name: alloy
   ports:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: otlp-grpc
-      protocol: TCP
-    - name: otlp-http
-      port: 4318
-      targetPort: otlp-http
-      protocol: TCP
     - name: http
       port: 12345
       targetPort: http
@@ -215,12 +183,6 @@ spec:
             - name: GOMEMLIMIT
               value: "330MiB"
           ports:
-            - name: otlp-grpc
-              containerPort: 4317
-              protocol: TCP
-            - name: otlp-http
-              containerPort: 4318
-              protocol: TCP
             - name: http
               containerPort: 12345
               protocol: TCP
@@ -278,13 +240,6 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - from:
-        - namespaceSelector: {}
-      ports:
-        - protocol: TCP
-          port: 4317
-        - protocol: TCP
-          port: 4318
     - from:
         - podSelector:
             matchLabels:

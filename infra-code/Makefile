@@ -273,3 +273,15 @@ lint: ## Validate every manifest tree
 .PHONY: e2e
 e2e: ## Full end-to-end acceptance sweep (curl + kubectl + argocd, every layer)
 	@bash scripts/e2e.sh
+
+.PHONY: ui-up
+ui-up: ## Force the on-demand UIs (pgAdmin, FalkorDB browser) up now, outside their cron window
+	kubectl -n ai-platform scale deploy/pgadmin deploy/falkordb-browser --replicas=1
+	kubectl -n ai-platform rollout status deploy/pgadmin --timeout=300s
+	kubectl -n ai-platform rollout status deploy/falkordb-browser --timeout=300s
+	@echo "FalkorDB browser: kubectl -n ai-platform port-forward svc/falkordb-browser 3002:3000"
+	@echo "pgAdmin        : kubectl -n ai-platform port-forward svc/pgadmin 5050:80"
+
+.PHONY: ui-down
+ui-down: ## Scale the on-demand UIs back to zero and reclaim ~320 MiB
+	kubectl -n ai-platform scale deploy/pgadmin deploy/falkordb-browser --replicas=0
