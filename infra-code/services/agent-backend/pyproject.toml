@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI agent-backend: auth + sessions + memory; delegates reasoning to a kagent Agent over A2A."
 requires-python = ">=3.12"
 dependencies = [
+    "redis>=7.1,<8.1",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "python-multipart>=0.0.9",

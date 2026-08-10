@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastMCP STREAMABLE_HTTP server wrapping Graphiti-on-FalkorDB (Gemini) for the kagent MVP agent"
 requires-python = ">=3.12"
 dependencies = [
+    "redis>=7.1,<8.1",
     "mcp>=1.2.0,<2",
     "graphiti-core[falkordb,google-genai]>=0.13.0",
 ]
