@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "FastMCP STREAMABLE_HTTP web-search tool server (DuckDuckGo) for the kagent MVP agent"
 requires-python = ">=3.12"
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.2.0,<2",
     "ddgs>=9.0.0",
     "httpx>=0.27.0",
 ]

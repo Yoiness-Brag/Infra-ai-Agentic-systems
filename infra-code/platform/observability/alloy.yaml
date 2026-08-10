@@ -130,29 +130,12 @@ data:
       send_batch_max_size = 2048
       timeout             = "2s"
       output {
-        traces = [otelcol.exporter.otlphttp.langfuse.input]
+        traces = [otelcol.exporter.debug.default.input]
       }
     }
 
-    otelcol.auth.basic "langfuse" {
-      username = sys.env("LANGFUSE_PUBLIC_KEY")
-      password = sys.env("LANGFUSE_SECRET_KEY")
-    }
-
-    otelcol.exporter.otlphttp "langfuse" {
-      client {
-        endpoint = sys.env("LANGFUSE_OTLP_ENDPOINT")
-        auth     = otelcol.auth.basic.langfuse.handler
-      }
-      sending_queue {
-        enabled       = true
-        num_consumers = 2
-        queue_size    = 50
-      }
-      retry_on_failure {
-        enabled          = true
-        max_elapsed_time = "120s"
-      }
+    otelcol.exporter.debug "default" {
+      verbosity = "basic"
     }
 ---
 apiVersion: v1
@@ -231,24 +214,6 @@ spec:
                   fieldPath: spec.nodeName
             - name: GOMEMLIMIT
               value: "330MiB"
-            - name: LANGFUSE_OTLP_ENDPOINT
-              valueFrom:
-                secretKeyRef:
-                  name: langfuse-otlp
-                  key: LANGFUSE_OTLP_ENDPOINT
-                  optional: true
-            - name: LANGFUSE_PUBLIC_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: langfuse-otlp
-                  key: LANGFUSE_PUBLIC_KEY
-                  optional: true
-            - name: LANGFUSE_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: langfuse-otlp
-                  key: LANGFUSE_SECRET_KEY
-                  optional: true
           ports:
             - name: otlp-grpc
               containerPort: 4317

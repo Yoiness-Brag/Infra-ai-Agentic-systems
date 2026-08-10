@@ -25,6 +25,8 @@ spec:
       namespace: ai-observability
     - server: https://kubernetes.default.svc
       namespace: keda
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
