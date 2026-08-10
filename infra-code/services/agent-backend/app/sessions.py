@@ -67,6 +67,16 @@ ORDER BY d.created_at DESC
 LIMIT $3 OFFSET $4;
 """
 
+_LIST_DOCUMENT_GROUPS = """
+SELECT d.group_id
+FROM documents d
+JOIN document_jobs j ON j.document_id = d.document_id
+WHERE d.app = $1 AND d.owner_subject = $2
+  AND j.state IN ('completed', 'partial')
+ORDER BY d.created_at DESC
+LIMIT $3;
+"""
+
 _DELETE_DOCUMENT = """
 DELETE FROM documents
 WHERE app = $1 AND owner_subject = $2 AND document_id = $3
@@ -277,6 +287,18 @@ class SessionStore:
         """List this subject's documents, newest first."""
         async with self._acquire() as conn:
             return list(await conn.fetch(_LIST_DOCUMENTS, app, subject, limit, offset))
+
+    async def list_document_groups(
+        self, app: str, subject: str, limit: int = 10
+    ) -> list[str]:
+        """Graph partitions of this subject's successfully ingested documents.
+
+        Only completed/partial jobs are returned; a queued or failed document
+        has nothing in the graph to search.
+        """
+        async with self._acquire() as conn:
+            rows = await conn.fetch(_LIST_DOCUMENT_GROUPS, app, subject, limit)
+        return [str(r["group_id"]) for r in rows]
 
     async def delete_document(
         self, app: str, subject: str, document_id: str

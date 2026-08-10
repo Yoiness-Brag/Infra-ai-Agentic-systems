@@ -16,6 +16,14 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-observability
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - '.spec.volumeClaimTemplates[]?.metadata.creationTimestamp'
+        - '.spec.volumeClaimTemplates[]?.status'
+        - '.spec.volumeClaimTemplates[]?.apiVersion'
+        - '.spec.volumeClaimTemplates[]?.kind'
   syncPolicy:
     automated:
       prune: true

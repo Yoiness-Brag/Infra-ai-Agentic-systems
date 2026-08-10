@@ -308,13 +308,25 @@ async def _run_turn(
         ) from exc
 
     session_group = settings.session_group_id(session_id)
+
+    # Retrieval spans this conversation AND every document this subject has
+    # ingested; without the document partitions an uploaded PDF is written to
+    # the graph but never read back.
+    try:
+        doc_groups = await sessions.list_document_groups(
+            settings.workload_app, subject, limit=10
+        )
+    except Exception as exc:  # noqa: BLE001 - degraded recall must not fail the turn
+        logger.warning("document partition lookup failed", extra={"err": exc.__class__.__name__})
+        doc_groups = []
+
     state = {
         "session_id": session_id,
         "subject": subject,
         "message": body.message,
         "turn_key": hashlib.sha256(body.message.encode()).hexdigest()[:16],
         "session_group_id": session_group,
-        "group_ids": [session_group],
+        "group_ids": [session_group, *doc_groups],
         "memory_context": [],
     }
     config = {

@@ -19,9 +19,9 @@ import uuid
 from datetime import UTC, datetime
 
 from graphiti_core import Graphiti
+from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
-from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
 from graphiti_core.llm_client.gemini_client import GeminiClient, LLMConfig
 from graphiti_core.nodes import EpisodeType
 
@@ -34,7 +34,16 @@ _EPISODE_NAMESPACE = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
 
 
 def episode_uuid(group_id: str, discriminator: str) -> str:
-    """Deterministic episode id, so retries overwrite instead of duplicating."""
+    """Deterministic episode id derived from its partition and discriminator.
+
+    NOTE: this is NOT passed to ``add_episode``. Graphiti treats ``uuid`` as an
+    *update handle* — it calls ``EpisodicNode.get_by_uuid`` and raises
+    ``NodeNotFoundError`` when the node does not already exist — so supplying a
+    novel deterministic uuid makes every first write fail. Idempotency is
+    enforced a level up instead: uploads dedup on the content SHA-256 before a
+    job is ever queued, and jobs carry terminal states so a completed document
+    is never re-ingested. Kept for correlation and for a future update path.
+    """
     return str(uuid.uuid5(_EPISODE_NAMESPACE, f"{group_id}|{discriminator}"))
 
 
@@ -127,7 +136,6 @@ class MemoryStore:
         now = datetime.now(UTC)
         await self._guarded(
             client.add_episode(
-                uuid=episode_uuid(group_id, f"turn:{turn_key}:{role}"),
                 name=f"{role}-{turn_key}",
                 episode_body=text,
                 source=EpisodeType.message,
@@ -148,7 +156,6 @@ class MemoryStore:
         client = self._client()
         await self._guarded(
             client.add_episode(
-                uuid=episode_uuid(group_id, f"chunk:{chunk_index}"),
                 name=f"chunk-{chunk_index}",
                 episode_body=text,
                 source=EpisodeType.text,
