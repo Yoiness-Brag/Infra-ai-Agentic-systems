@@ -204,11 +204,19 @@ class TestConfigFailClosed:
         assert settings.kagent_agent_a2a_url.endswith("/")
 
     def test_group_ids_are_app_scoped(self, settings):
-        assert settings.session_group_id("s1") == "mvp-app:session:s1"
-        assert settings.document_group_id("alice", "d1") == "mvp-app:alice:doc:d1"
+        assert settings.session_group_id("s1") == "mvp-app_session_s1"
+        assert settings.document_group_id("alice", "d1") == "mvp-app_alice_doc_d1"
         assert settings.document_group_id("alice", "d1").startswith(
             settings.owner_document_prefix("alice")
         )
+
+    def test_group_ids_pass_graphiti_validation(self, settings):
+        """Graphiti rejects anything outside [A-Za-z0-9_-]; JWT subjects contain '@'."""
+        from graphiti_core.helpers import validate_group_id
+
+        validate_group_id(settings.session_group_id("11111111-2222-3333-4444-555555555555"))
+        validate_group_id(settings.document_group_id("user@aila.sa", "d-1"))
+        assert ":" not in settings.document_group_id("user@aila.sa", "d-1")
 
 
 class TestIdempotency:

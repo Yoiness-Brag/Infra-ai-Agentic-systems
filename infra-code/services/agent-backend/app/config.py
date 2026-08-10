@@ -114,17 +114,29 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    @staticmethod
+    def _slug(value: str) -> str:
+        """Graphiti only accepts [A-Za-z0-9_-] in a group_id.
+
+        Subjects come from a JWT and routinely contain '@' or '.', so every
+        component is slugified before it becomes part of a partition key.
+        """
+        return "".join(c if (c.isascii() and (c.isalnum() or c in "-_")) else "_" for c in value)
+
     def session_group_id(self, session_id: str) -> str:
         """Graph partition for a conversation."""
-        return f"{self.workload_app}:session:{session_id}"
+        return f"{self._slug(self.workload_app)}_session_{self._slug(session_id)}"
 
     def document_group_id(self, subject: str, document_id: str) -> str:
         """Graph partition for one uploaded document, scoped to its owner."""
-        return f"{self.workload_app}:{subject}:doc:{document_id}"
+        return (
+            f"{self._slug(self.workload_app)}_{self._slug(subject)}"
+            f"_doc_{self._slug(document_id)}"
+        )
 
     def owner_document_prefix(self, subject: str) -> str:
         """Prefix shared by every document partition belonging to one subject."""
-        return f"{self.workload_app}:{subject}:doc:"
+        return f"{self._slug(self.workload_app)}_{self._slug(subject)}_doc_"
 
 
 @lru_cache(maxsize=1)

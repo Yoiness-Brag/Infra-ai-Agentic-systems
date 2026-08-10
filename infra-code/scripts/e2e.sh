@@ -26,7 +26,7 @@ hdr "L0  cluster"
 kubectl cluster-info >/dev/null 2>&1 && ok "apiserver reachable" || { no "apiserver unreachable"; exit 1; }
 alloc=$(kubectl get node -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null)
 [ -n "$alloc" ] && ok "node allocatable memory = $alloc" || no "cannot read allocatable"
-notready=$(kubectl get pods -A --no-headers 2>/dev/null | awk '$3!="Running" && $3!="Completed" && $3!="Succeeded"{print $1"/"$2"("$3")"}')
+notready=$(kubectl get pods -A --no-headers 2>/dev/null | awk '$4!="Running" && $4!="Completed" && $4!="Succeeded"{print $1"/"$2"("$4")"}')
 [ -z "$notready" ] && ok "every pod Running/Completed" || no "not ready: $(echo $notready | tr '\n' ' ')"
 oom=$(kubectl get pods -A --no-headers 2>/dev/null | awk '$5>3{print $1"/"$2"("$5" restarts)"}')
 [ -z "$oom" ] && ok "no pod restart storms" || no "restarting: $(echo $oom | tr '\n' ' ')"
@@ -88,9 +88,9 @@ hdr "L4  data plane + PDF ingestion"
 kubectl -n ai-platform exec statefulset/postgres -- psql -U agent -d agentmvp -tAc \
   "select count(*) from information_schema.tables where table_name in ('sessions','documents','document_jobs')" 2>/dev/null \
   | grep -q '^3$' && ok "postgres schema: sessions + documents + document_jobs" || no "postgres schema incomplete"
-kubectl -n ai-platform exec statefulset/falkordb -- redis-cli PING 2>/dev/null | grep -q PONG \
+kubectl -n ai-platform exec statefulset/falkordb -- sh -c 'if [ -n "$FALKORDB_PASSWORD" ]; then redis-cli -a "$FALKORDB_PASSWORD" --no-auth-warning PING; else redis-cli PING; fi' 2>/dev/null | grep -q PONG \
   && ok "falkordb responds to PING" || no "falkordb PING failed"
-kubectl -n ai-platform exec statefulset/falkordb -- redis-cli CONFIG GET appendonly 2>/dev/null | grep -q yes \
+kubectl -n ai-platform exec statefulset/falkordb -- sh -c 'if [ -n "$FALKORDB_PASSWORD" ]; then redis-cli -a "$FALKORDB_PASSWORD" --no-auth-warning CONFIG GET appendonly; else redis-cli CONFIG GET appendonly; fi' 2>/dev/null | grep -q yes \
   && ok "falkordb AOF enabled (durable checkpoints)" || no "falkordb AOF disabled"
 
 if [ -n "$TOKEN" ]; then

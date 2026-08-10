@@ -52,7 +52,7 @@ require-env: ## Fail-closed: every required secret must be non-empty
 	  [ -n "$${!v:-}" ] || { echo "ERROR: $$v is empty in $(ENV_FILE)"; missing=1; }; \
 	done; \
 	[ $$missing -eq 0 ] || exit 1; \
-	echo "env OK (FALKORDB_PASSWORD optional)"
+	echo "env OK (FALKORDB_PASSWORD optional)" 1>&2
 
 .PHONY: preflight
 preflight: require-tools require-env ## Tools + env + host RAM check
