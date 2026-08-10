@@ -171,3 +171,7 @@ push: ## Commit and push to $(REMOTE_NAME)/$(BRANCH) (authenticate first)
 	@git diff --cached --quiet && echo "nothing to commit" || git commit -m "$(or $(MSG),chore: sync infra-code)"
 	git push -u $(REMOTE_NAME) $(BRANCH)
 	@$(MAKE) --no-print-directory remote-check
+
+.PHONY: e2e
+e2e: ## Full end-to-end acceptance sweep across every layer
+	$(call delegate,e2e)

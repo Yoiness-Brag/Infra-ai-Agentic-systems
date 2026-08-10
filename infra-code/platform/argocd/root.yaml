@@ -8,7 +8,7 @@ metadata:
 spec:
   project: infra-ai-mvp
   source:
-    repoURL: https://github.com/YounssBrag/Infra-ai-Agentic-systems.git
+    repoURL: https://github.com/Yoiness-Brag/Infra-ai-Agentic-systems.git
     targetRevision: main
     path: infra-code/platform/argocd/applications
   destination:

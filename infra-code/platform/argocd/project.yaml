@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Infra-AI agentic platform (L1..L7) on k3d
   sourceRepos:
-    - https://github.com/YounssBrag/Infra-ai-Agentic-systems.git
+    - https://github.com/Yoiness-Brag/Infra-ai-Agentic-systems.git
     - https://charts.konghq.com
     - https://kedacore.github.io/charts
     - https://langfuse.github.io/langfuse-k8s

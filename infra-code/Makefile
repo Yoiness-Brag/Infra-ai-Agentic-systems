@@ -262,3 +262,7 @@ eval: require-env ## Run the Gemini LLM-as-judge eval against /chat
 .PHONY: lint
 lint: ## Validate every manifest tree
 	@bash scripts/lint.sh
+
+.PHONY: e2e
+e2e: ## Full end-to-end acceptance sweep (curl + kubectl + argocd, every layer)
+	@bash scripts/e2e.sh
