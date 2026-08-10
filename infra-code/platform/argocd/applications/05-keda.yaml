@@ -18,7 +18,7 @@ spec:
         valueFiles:
           - $values/infra-code/platform/keda/values.yaml
     - repoURL: https://github.com/Yoiness-Brag/Infra-ai-Agentic-systems.git
-      targetRevision: main
+      targetRevision: platform-v2
       ref: values
   destination:
     server: https://kubernetes.default.svc

@@ -9,7 +9,7 @@ spec:
   project: infra-ai-mvp
   source:
     repoURL: https://github.com/Yoiness-Brag/Infra-ai-Agentic-systems.git
-    targetRevision: main
+    targetRevision: platform-v2
     path: infra-code/platform/argocd/applications
   destination:
     server: https://kubernetes.default.svc

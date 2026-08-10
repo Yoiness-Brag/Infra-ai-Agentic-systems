@@ -11,7 +11,7 @@ spec:
   project: infra-ai-mvp
   source:
     repoURL: https://github.com/Yoiness-Brag/Infra-ai-Agentic-systems.git
-    targetRevision: main
+    targetRevision: platform-v2
     path: infra-code/platform/keda/k8s
   destination:
     server: https://kubernetes.default.svc
