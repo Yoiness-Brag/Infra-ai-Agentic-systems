@@ -18,6 +18,30 @@ spec:
       port: 6379
       targetPort: resp
       protocol: TCP
+    - name: browser
+      port: 3000
+      targetPort: browser
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falkordb-browser
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: graph-memory-ui
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: falkordb
+  ports:
+    - name: browser
+      port: 3000
+      targetPort: browser
+      nodePort: 30302
+      protocol: TCP
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -131,10 +155,56 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+        - name: browser
+          image: falkordb/falkordb:v4.2.2
+          imagePullPolicy: IfNotPresent
+          workingDir: /FalkorDBBrowser
+          command: ["node", "server.js"]
+          env:
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: PORT
+              value: "3000"
+            - name: HOME
+              value: /tmp
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+          ports:
+            - name: browser
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: browser
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: browser-tmp
+              mountPath: /tmp
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        - name: browser-tmp
+          emptyDir:
+            sizeLimit: 256Mi
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -182,3 +252,9 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 3000

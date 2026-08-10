@@ -24,6 +24,12 @@ ports:
   - port: 9001:30901
     nodeFilters:
       - server:0
+  - port: 3002:30302
+    nodeFilters:
+      - server:0
+  - port: 5050:30303
+    nodeFilters:
+      - server:0
 
 options:
   k3d:

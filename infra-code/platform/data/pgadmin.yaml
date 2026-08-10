@@ -1,0 +1,202 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pgadmin
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: ai-platform
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgadmin-servers
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: ai-platform
+data:
+  servers.json: |
+    {
+      "Servers": {
+        "1": {
+          "Name": "agent sessions (ai-platform)",
+          "Group": "infra-ai",
+          "Host": "postgres.ai-platform",
+          "Port": 5432,
+          "MaintenanceDB": "agentmvp",
+          "Username": "agent",
+          "SSLMode": "prefer",
+          "Comment": "sessions + documents + document_jobs"
+        }
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgadmin
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: session-store-ui
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: pgadmin
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30303
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgadmin
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: session-store-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pgadmin
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pgadmin
+        app: pgadmin
+        app.kubernetes.io/part-of: ai-platform
+        app.kubernetes.io/component: session-store-ui
+    spec:
+      serviceAccountName: pgadmin
+      automountServiceAccountToken: false
+      priorityClassName: platform-observability
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 5050
+        runAsGroup: 5050
+        fsGroup: 5050
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pgadmin
+          image: dpage/pgadmin4:9.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGADMIN_DEFAULT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: pgadmin-creds
+                  key: PGADMIN_DEFAULT_EMAIL
+            - name: PGADMIN_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pgadmin-creds
+                  key: PGADMIN_DEFAULT_PASSWORD
+            - name: PGADMIN_LISTEN_PORT
+              value: "8080"
+            - name: PGADMIN_CONFIG_SERVER_MODE
+              value: "True"
+            - name: PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED
+              value: "False"
+            - name: PGADMIN_DISABLE_POSTFIX
+              value: "True"
+            - name: GUNICORN_ACCESS_LOGFILE
+              value: /dev/null
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /misc/ping
+              port: http
+            periodSeconds: 5
+            failureThreshold: 40
+          readinessProbe:
+            httpGet:
+              path: /misc/ping
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 5050
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgadmin
+            - name: servers
+              mountPath: /pgadmin4/servers.json
+              subPath: servers.json
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: servers
+          configMap:
+            name: pgadmin-servers
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pgadmin-allow
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pgadmin
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432

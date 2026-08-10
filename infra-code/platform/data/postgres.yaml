@@ -235,6 +235,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-backend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pgadmin
       ports:
         - protocol: TCP
           port: 5432

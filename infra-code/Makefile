@@ -11,6 +11,8 @@ ARGOCD_URL    ?= http://localhost:8081
 GRAFANA_URL   ?= http://localhost:3000
 LANGFUSE_URL  ?= http://localhost:3001
 MINIO_URL     ?= http://localhost:9001
+FALKOR_UI_URL ?= http://localhost:3002
+PGADMIN_URL   ?= http://localhost:5050
 
 JWT_ISS       ?= mvp-app
 ARGOCD_NS     := argocd
@@ -46,7 +48,7 @@ require-tools: ## Fail unless every required CLI is on PATH
 require-env: ## Fail-closed: every required secret must be non-empty
 	@test -n "$(ENV_FILE)" || { echo "ERROR: no .env/.env.infra or .env found"; exit 1; }
 	@$(LOADENV); missing=0; \
-	for v in GOOGLE_API_KEY JWT_SECRET POSTGRES_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD GRAFANA_ADMIN_PASSWORD; do \
+	for v in GOOGLE_API_KEY JWT_SECRET POSTGRES_PASSWORD MINIO_ROOT_USER MINIO_ROOT_PASSWORD GRAFANA_ADMIN_PASSWORD PGADMIN_DEFAULT_PASSWORD; do \
 	  [ -n "$${!v:-}" ] || { echo "ERROR: $$v is empty in $(ENV_FILE)"; missing=1; }; \
 	done; \
 	[ $$missing -eq 0 ] || exit 1; \
@@ -110,6 +112,9 @@ secrets: require-env namespaces ## Create every Secret from $(ENV_FILE) (idempot
 	  --from-literal=MINIO_ROOT_USER="$$MINIO_ROOT_USER" \
 	  --from-literal=MINIO_ROOT_PASSWORD="$$MINIO_ROOT_PASSWORD"; \
 	mk grafana-admin ai-observability --from-literal=GRAFANA_ADMIN_PASSWORD="$$GRAFANA_ADMIN_PASSWORD"; \
+	mk pgadmin-creds ai-platform \
+	  --from-literal=PGADMIN_DEFAULT_EMAIL="$${PGADMIN_DEFAULT_EMAIL:-admin@infra-ai.local}" \
+	  --from-literal=PGADMIN_DEFAULT_PASSWORD="$$PGADMIN_DEFAULT_PASSWORD"; \
 	if [ -n "$${FALKORDB_PASSWORD:-}" ]; then \
 	  mk falkordb-auth ai-platform --from-literal=FALKORDB_PASSWORD="$$FALKORDB_PASSWORD"; \
 	else \
@@ -244,6 +249,8 @@ urls: ## Print every UI/endpoint
 	@echo "ArgoCD         $(ARGOCD_URL)    (admin / make argocd-password)"
 	@echo "Grafana        $(GRAFANA_URL)   (admin / GRAFANA_ADMIN_PASSWORD in $(ENV_FILE))"
 	@echo "MinIO console  $(MINIO_URL)     (MINIO_ROOT_USER / MINIO_ROOT_PASSWORD)"
+	@echo "FalkorDB UI    $(FALKOR_UI_URL)      (graph memory browser; connect host=localhost port=6379)"
+	@echo "pgAdmin        $(PGADMIN_URL)      (PGADMIN_DEFAULT_EMAIL / PGADMIN_DEFAULT_PASSWORD in $(ENV_FILE))"
 	@echo "Langfuse       $(LANGFUSE_URL)  (only after: make langfuse-up)"
 
 .PHONY: token
