@@ -22,6 +22,14 @@ dependencies = [
     "langchain-falkordb[langgraph]>=0.2.0",
 ]
 
+[project.optional-dependencies]
+tracing = [
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+    "opentelemetry-instrumentation-httpx>=0.51b0",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.6",

@@ -10,9 +10,11 @@ import time
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from app.a2a_client import (
     A2AClient,
+    A2AError,
     A2AProtocolError,
     A2ARemoteError,
     _parse_result,
@@ -137,7 +139,7 @@ class TestA2ARetryClassification:
             return httpx.Response(503, json={})
 
         client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        with pytest.raises(Exception):
+        with pytest.raises(A2AError):
             await client.send("hi")
         assert calls["n"] == settings.a2a_max_retries + 1
         await client.close()
@@ -197,7 +199,7 @@ class TestConfigFailClosed:
         from app.config import Settings
 
         monkeypatch.setenv("POSTGRES_PASSWORD", bad)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Settings()
 
     def test_a2a_url_gets_trailing_slash(self, settings):
@@ -261,3 +263,37 @@ class TestPdfGuards:
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+class TestQuotaHandling:
+    """A provider quota refusal must be distinguishable from a real fault."""
+
+    def test_resource_exhausted_becomes_quota_error(self):
+        from app.a2a_client import A2AQuotaError, _parse_result
+
+        with pytest.raises(A2AQuotaError) as ei:
+            _parse_result(
+                {
+                    "status": {
+                        "state": "failed",
+                        "message": {
+                            "parts": [
+                                {
+                                    "text": "429 RESOURCE_EXHAUSTED. quota exceeded. "
+                                    "Please retry in 47.4s."
+                                }
+                            ]
+                        },
+                    }
+                }
+            )
+        assert ei.value.retry_after == pytest.approx(47.4)
+
+    def test_other_failures_stay_generic(self):
+        from app.a2a_client import A2AQuotaError, A2ARemoteError, _parse_result
+
+        with pytest.raises(A2ARemoteError) as ei:
+            _parse_result(
+                {"status": {"state": "failed", "message": {"parts": [{"text": "boom"}]}}}
+            )
+        assert not isinstance(ei.value, A2AQuotaError)

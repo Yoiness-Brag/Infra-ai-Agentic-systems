@@ -152,20 +152,63 @@ make smoke         # POST /chat and /chat/sync through Kong with a fresh JWT
 `make verify` asserts the whole edge chain, including that `POST /chat` **without** a token returns
 `401` — proving Kong's `jwt` plugin is actually attached, not just that something answered.
 
-### 4. Endpoints
+### 4. Endpoints and UIs
 
-| What | URL | Auth |
-|---|---|---|
-| Swagger UI | http://localhost:8080/docs | none (docs route has no `jwt` plugin) |
-| Chat (JSON) | `POST http://localhost:8080/chat/sync` | `Authorization: Bearer $(make token)` |
-| Chat (SSE) | `POST http://localhost:8080/chat` | same |
-| PDF upload | `POST http://localhost:8080/documents` | same, `multipart/form-data` |
-| ArgoCD | http://localhost:8081 | `admin` / `make argocd-password` |
-| Grafana | http://localhost:3000 | `admin` / `GRAFANA_ADMIN_PASSWORD` |
-| MinIO console | http://localhost:9001 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
-| Langfuse | http://localhost:3001 | after `make langfuse-up` |
+| UI / endpoint | URL | Credentials | Status |
+|---|---|---|---|
+| **Swagger UI** | http://localhost:8080/docs | none (docs route carries no `jwt` plugin) | running |
+| Chat (JSON) | `POST http://localhost:8080/chat/sync` | `Authorization: Bearer $(make token)` | running |
+| Chat (SSE) | `POST http://localhost:8080/chat` | same | running |
+| PDF upload | `POST http://localhost:8080/documents` | same, `multipart/form-data` | running |
+| **ArgoCD** | http://localhost:8081 | `admin` / `make argocd-password` | running |
+| **Grafana** | http://localhost:3000 | `admin` / `GRAFANA_ADMIN_PASSWORD` | running |
+| **MinIO console** | http://localhost:9001 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | running |
+| **FalkorDB browser** | http://localhost:3002 | connect to `falkordb.ai-platform:6379` | on demand — `make ui-up` |
+| **pgAdmin** | http://localhost:5050 | `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` | on demand — `make ui-up` |
+| Langfuse | http://localhost:3001 | set at first login | **needs ~2.9 GiB free** — `make langfuse-up` |
+| Rancher | — | — | **not installed** — see below |
 
-Use `/chat/sync` from Swagger — Swagger UI cannot render an SSE stream.
+Use `/chat/sync` from Swagger; Swagger UI cannot render an SSE stream.
+
+The FalkorDB browser and pgAdmin idle at **0 replicas** and are driven by KEDA
+`cron` ScaledObjects (up 06:00-20:00 UTC), which reclaims ~320 MiB when they are
+not in use. `make ui-up` forces them up immediately; `make ui-down` returns them
+to zero. Their host port-mappings bind after one `make local-down && make local-up`;
+before that, reach them with `kubectl -n ai-platform port-forward svc/pgadmin 5050:80`.
+
+#### Why there is no Rancher UI
+
+Rancher is a multi-cluster **management** product, separate from K3s. It needs
+~1.5-2 GiB plus cert-manager and a privileged runtime. On a host where the core
+platform already requests 5.3 GiB of a 5.3 GiB allocatable node, installing it
+evicts the services it would be used to inspect - and it would show the same pods
+that ArgoCD and `kubectl` already show. If you want cluster-wide visibility at
+zero cost, use `k9s`. Adding Rancher is a deliberate decision that needs both an
+ADR and materially more RAM; it is not a defect that it is absent.
+
+#### What is deliberately absent
+
+- **Redis** - the docs specify one (dedup tables, rate-limit counters, session
+  cache) but it was never built. The only Redis pod in the cluster is
+  `argocd-redis`, which belongs to ArgoCD. FalkorDB speaks the Redis protocol but
+  is the graph store, not a cache. Tracked in `SPEC.md` 20.5.
+- NATS JetStream, Qdrant, `rerank-svc`, CubeSandbox, OPA Gatekeeper, cert-manager,
+  Mimir, Tempo, Pyroscope, Argo Rollouts, ArgoCD Image Updater.
+
+#### LLM quota
+
+The Gemini **free tier allows 20 `generateContent` calls per day, per model**.
+Once exhausted the agent returns a clear `429` with `Retry-After` rather than an
+opaque `502`:
+
+```
+HTTP/1.1 429 Too Many Requests
+retry-after: 58
+{"detail":"upstream LLM quota exhausted; retry later"}
+```
+
+Switching `GEMINI_MODEL` to another available model grants a fresh 20-call
+allowance, since the quota is per model.
 
 ### 5. Upload a PDF
 

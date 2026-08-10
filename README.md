@@ -318,14 +318,22 @@ ArgoCD's repo-server clones over the network, so GitOps requires this repository
 
 ### Endpoints
 
-| What | URL |
-|---|---|
-| Swagger UI (agent API) | http://localhost:8080/docs |
-| Chat / PDF upload | `POST /chat/sync`, `POST /documents` on `:8080` |
-| ArgoCD | http://localhost:8081 |
-| Grafana | http://localhost:3000 |
-| MinIO console | http://localhost:9001 |
-| Langfuse | http://localhost:3001 (opt-in profile) |
+| What | URL | Status |
+|---|---|---|
+| Swagger UI (agent API) | http://localhost:8080/docs | running |
+| Chat / PDF upload | `POST /chat/sync`, `POST /documents` on `:8080` | running |
+| ArgoCD | http://localhost:8081 | running |
+| Grafana (metrics + LogQL) | http://localhost:3000 | running |
+| MinIO console | http://localhost:9001 | running |
+| FalkorDB graph browser | http://localhost:3002 | on demand (`make ui-up`) |
+| pgAdmin (session store) | http://localhost:5050 | on demand (`make ui-up`) |
+| Langfuse | http://localhost:3001 | opt-in, needs ~2.9 GiB free |
+| Rancher | — | not installed by design — see `infra-code/README.md` |
+
+The last two UIs idle at 0 replicas under KEDA `cron` ScaledObjects and are
+brought up with `make ui-up`. Rancher is deliberately absent: it needs ~1.5-2 GiB
+plus cert-manager and a privileged runtime, and duplicates what ArgoCD and
+`kubectl` already show.
 
 ## Status
 

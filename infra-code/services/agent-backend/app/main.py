@@ -30,7 +30,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 
-from .a2a_client import A2AClient, A2AProtocolError, A2ARemoteError
+from .a2a_client import A2AClient, A2AProtocolError, A2AQuotaError, A2ARemoteError
 from .auth import verify_token
 from .config import Settings, get_settings
 from .documents import router as documents_router
@@ -47,6 +47,7 @@ from .metrics import (
 from .resilience import CircuitOpenError
 from .sessions import SessionOwnershipError, SessionStore
 from .storage import ObjectStore
+from .tracing import instrument_app, setup_tracing
 
 logger = logging.getLogger("agent_backend.main")
 
@@ -99,6 +100,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     schedulable and observable while a dependency is still coming up."""
     settings = get_settings()
     configure_logging(settings.log_level)
+    if setup_tracing(settings.app_name):
+        instrument_app(app)
 
     sessions = SessionStore(settings)
     memory = MemoryStore(settings)
@@ -352,6 +355,16 @@ async def _run_turn(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="agent temporarily unavailable",
+        ) from exc
+    except A2AQuotaError as exc:
+        A2A_CALL_COUNT.labels(outcome="quota_exhausted").inc()
+        ERROR_COUNT.labels(path="/chat", type="llm_quota").inc()
+        logger.error("upstream LLM quota exhausted", extra={"retry_after": exc.retry_after})
+        headers = {"Retry-After": str(int(exc.retry_after))} if exc.retry_after else None
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="upstream LLM quota exhausted; retry later",
+            headers=headers,
         ) from exc
     except (A2ARemoteError, A2AProtocolError) as exc:
         A2A_CALL_COUNT.labels(outcome="error").inc()

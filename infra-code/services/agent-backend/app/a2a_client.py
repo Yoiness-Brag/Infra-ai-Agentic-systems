@@ -47,6 +47,20 @@ class A2AProtocolError(A2AError):
     """The agent answered with a shape we cannot parse. Not a transport fault."""
 
 
+class A2AQuotaError(A2ARemoteError):
+    """The upstream LLM provider refused on quota (HTTP 429 / RESOURCE_EXHAUSTED).
+
+    Distinguished from a generic remote failure because the operator response is
+    completely different: nothing is misconfigured, the account simply has no
+    requests left. The Gemini free tier allows 20 generate_content calls per day
+    *per model*, so this is reached quickly during testing.
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 @dataclass
 class A2AResult:
     """Outcome of one A2A turn."""
@@ -293,7 +307,12 @@ def _parse_result(result: object) -> A2AResult:
         detail = ""
         if isinstance(status, dict) and isinstance(status.get("message"), dict):
             detail = _text_from_parts(status["message"].get("parts"))
-        raise A2ARemoteError(f"agent task {state}: {detail or 'no detail'}")
+        if "RESOURCE_EXHAUSTED" in detail or "429" in detail:
+            raise A2AQuotaError(
+                f"upstream LLM quota exhausted: {_squash(detail)}",
+                retry_after=_parse_retry_after(detail),
+            )
+        raise A2ARemoteError(f"agent task {state}: {_squash(detail) or 'no detail'}")
 
     text = _text_from_parts(result.get("parts"))
     if text:
@@ -319,6 +338,19 @@ def _parse_result(result: object) -> A2AResult:
         )
 
     raise A2AProtocolError("could not extract text from a2a result")
+
+
+def _squash(text: str, limit: int = 300) -> str:
+    """Collapse a multi-line upstream error into one loggable line."""
+    return " ".join((text or "").split())[:limit]
+
+
+def _parse_retry_after(detail: str) -> float | None:
+    """Pull 'Please retry in 47.4s' out of a provider quota message."""
+    import re
+
+    m = re.search(r"retry in ([0-9.]+)s", detail)
+    return float(m.group(1)) if m else None
 
 
 def _text_from_parts(parts: object) -> str:
