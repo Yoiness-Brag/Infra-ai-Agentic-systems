@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent-backend
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: infra-ai-mvp
+  source:
+    repoURL: https://github.com/YounssBrag/Infra-ai-Agentic-systems.git
+    targetRevision: main
+    path: infra-code/services/agent-backend/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-platform
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: agent-backend
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

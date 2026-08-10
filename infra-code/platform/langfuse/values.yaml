@@ -1,0 +1,148 @@
+global:
+  security:
+    allowInsecureImages: true
+
+langfuse:
+  salt:
+    secretKeyRef:
+      name: langfuse-secrets
+      key: SALT
+  encryptionKey:
+    secretKeyRef:
+      name: langfuse-secrets
+      key: ENCRYPTION_KEY
+  nextauth:
+    url: http://localhost:3001
+    secret:
+      secretKeyRef:
+        name: langfuse-secrets
+        key: NEXTAUTH_SECRET
+
+  features:
+    telemetryEnabled: false
+
+  web:
+    replicas: 1
+    service:
+      type: NodePort
+      port: 3000
+      nodePort: 30301
+    resources:
+      requests:
+        cpu: 100m
+        memory: 640Mi
+      limits:
+        cpu: "2"
+        memory: 1Gi
+
+  worker:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 448Mi
+      limits:
+        cpu: "1"
+        memory: 768Mi
+
+postgresql:
+  deploy: true
+  auth:
+    username: langfuse
+    database: langfuse
+    existingSecret: langfuse-postgres
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+  architecture: standalone
+  primary:
+    resourcesPreset: "none"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        cpu: 500m
+        memory: 384Mi
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: local-path
+
+redis:
+  deploy: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: langfuse-redis
+    existingSecretPasswordKey: redis-password
+  master:
+    resourcesPreset: "none"
+    resources:
+      requests:
+        cpu: 25m
+        memory: 96Mi
+      limits:
+        cpu: 250m
+        memory: 192Mi
+    persistence:
+      enabled: false
+  replica:
+    replicaCount: 0
+
+clickhouse:
+  deploy: true
+  clusterEnabled: false
+  shards: 1
+  replicaCount: 1
+  resourcesPreset: "none"
+  auth:
+    username: default
+    existingSecret: langfuse-clickhouse
+    existingSecretKey: password
+  keeper:
+    enabled: false
+  zookeeper:
+    enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1536Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: local-path
+  extraEnvVars:
+    - name: CLICKHOUSE_SKIP_USER_SETUP
+      value: "0"
+
+s3:
+  deploy: false
+  storageProvider: "s3"
+  bucket: langfuse
+  region: auto
+  endpoint: http://minio.ai-platform:9000
+  forcePathStyle: true
+  accessKeyId:
+    secretKeyRef:
+      name: langfuse-s3
+      key: MINIO_ROOT_USER
+  secretAccessKey:
+    secretKeyRef:
+      name: langfuse-s3
+      key: MINIO_ROOT_PASSWORD
+  eventUpload:
+    enabled: true
+    bucket: langfuse
+    prefix: "events/"
+  batchExport:
+    enabled: true
+    bucket: langfuse
+    prefix: "exports/"
+  mediaUpload:
+    enabled: true
+    bucket: langfuse
+    prefix: "media/"

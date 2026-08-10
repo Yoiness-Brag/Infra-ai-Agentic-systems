@@ -1,0 +1,33 @@
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-data
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Stateful stores (postgres, falkordb, minio, clickhouse). Evicted last."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-core
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+value: 900000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Request path (kong, kagent, agent-backend, mcp servers)."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-observability
+  labels:
+    app.kubernetes.io/part-of: infra-ai-mvp
+value: 100000
+globalDefault: false
+preemptionPolicy: Never
+description: "Telemetry (prometheus, grafana, loki, alloy, langfuse). Evicted first."

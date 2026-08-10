@@ -1,0 +1,75 @@
+%% L6 — Safety, Policy and Governance: enforcement at four points
+flowchart TB
+    subgraph EXT[Outside the platform]
+        CALL[Caller / peer A2A agent]
+    end
+
+    subgraph EP1[L1 perimeter enforcement]
+        K[Kong AI Gateway]
+        K_JWT[jwt plugin]
+        K_RL[ai-rate-limiting-advanced]
+        K_GUARD[ai-prompt-guard + request-transformer]
+        K_CACHE[ai-semantic-cache]
+    end
+
+    subgraph EP2[L3 / Agent CRD enforcement]
+        AGENT[Agent CRD]
+        TOOL_ALLOW[Tool allowlist]
+        HITL[HITL gates]
+        NP[NetworkPolicy default-deny]
+    end
+
+    subgraph EP3[L5 sandbox enforcement]
+        RUN[mcp-sandbox-runner]
+        MANIFEST[Manifest schema validation]
+        EGRESS[CubeVS eBPF egress policy]
+        DEADLINE[Deadline + resource budget]
+    end
+
+    subgraph ADM[Admission enforcement]
+        OPA[OPA Gatekeeper]
+        RESLIM[RequireResourceLimits]
+        NOLATEST[DisallowLatestImageTag]
+        NOPRIV[DisallowPrivilegedContainers]
+        REQCUBE[RequireCubeRuntimeClassInTools]
+        REQNP[RequireNetworkPolicy]
+    end
+
+    subgraph EP4[L7 telemetry-egress enforcement]
+        OTEL[OTel Collector]
+        OTTL1[OTTL PII redaction]
+        OTTL2[Drop prompt content events when policy disables]
+        SAMPLE[Sampling 100%% errors, 100%% HITL, 5%% routine]
+    end
+
+    subgraph LEDGER[Audit ledger]
+        CH[(ClickHouse platform_audit)]
+        WORKER[Langfuse Worker writer]
+    end
+
+    GIT[ArgoCD GitOps apply] --> OPA
+    OPA --> RESLIM
+    OPA --> NOLATEST
+    OPA --> NOPRIV
+    OPA --> REQCUBE
+    OPA --> REQNP
+
+    CALL -->|JWT + HTTPS| K
+    K --> K_JWT --> K_RL --> K_GUARD --> K_CACHE
+    K_CACHE --> AGENT
+
+    AGENT --> TOOL_ALLOW
+    AGENT --> HITL
+    AGENT -.-> NP
+
+    TOOL_ALLOW --> RUN
+    RUN --> MANIFEST --> EGRESS --> DEADLINE
+
+    K -.-> OTEL
+    AGENT -.-> OTEL
+    RUN -.-> OTEL
+    OTEL --> OTTL1 --> OTTL2 --> SAMPLE
+    SAMPLE --> WORKER --> CH
+
+    classDef enforcement fill:#fde8e8,stroke:#c53030,color:#000
+    class K_JWT,K_RL,K_GUARD,TOOL_ALLOW,HITL,NP,MANIFEST,EGRESS,DEADLINE,RESLIM,NOLATEST,NOPRIV,REQCUBE,REQNP,OTTL1,OTTL2 enforcement

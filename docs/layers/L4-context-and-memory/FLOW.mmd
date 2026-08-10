@@ -1,0 +1,55 @@
+%% L4 — Context and Memory: read and write flow through memory-svc
+flowchart LR
+    subgraph L3[L3 Agent Runtime]
+        ORC[agent-orchestrator]
+        WRK[agent-worker]
+    end
+
+    subgraph MS[memory-svc]
+        API[HTTP API<br/>per-workload partitioning]
+        ROUTER{Backend router}
+        GRAPHITI[Graphiti client<br/>add_episode / search]
+        QC[Qdrant client]
+        RC[Redis client]
+        PC[Postgres / LangGraph checkpointer]
+    end
+
+    subgraph SVCS[session-svc]
+        COMPACT[Compaction job<br/>summarize + promote]
+    end
+
+    subgraph STORES[L4 data stores]
+        FD[(FalkorDB<br/>temporal KG)]
+        QD[(Qdrant<br/>vectors)]
+        RD[(Redis<br/>short-term + dedup)]
+        PG[(Postgres<br/>checkpoints + app data)]
+    end
+
+    subgraph BUS[L2 NATS bus]
+        NING[memory.ingest.&lt;app&gt;]
+    end
+
+    ORC -->|POST /episodes synchronous| API
+    WRK -->|POST /episodes synchronous| API
+    WRK -->|GET /vectors/search| API
+    ORC -->|PUT /session/&lt;sid&gt;| API
+    ORC -->|publish async write| NING
+    NING -->|consumer| API
+
+    API --> ROUTER
+    ROUTER -->|graph ops| GRAPHITI
+    ROUTER -->|vector ops| QC
+    ROUTER -->|session ops| RC
+    ROUTER -->|checkpoint ops| PC
+
+    GRAPHITI -->|Cypher over Redis protocol| FD
+    QC -->|gRPC| QD
+    RC -->|RESP| RD
+    PC -->|libpq TLS| PG
+
+    SVCS -->|reads recent session| API
+    COMPACT -->|writes summary episode| API
+    COMPACT -.->|promotes to long-term| GRAPHITI
+
+    classDef store fill:#e8f0fe,stroke:#1a73e8,color:#000
+    class FD,QD,RD,PG store

@@ -1,0 +1,44 @@
+%% L1 — Interface and Entry: request lifecycle through Kong AI Gateway
+sequenceDiagram
+    autonumber
+    participant C as External caller
+    participant K as Kong AI Gateway
+    participant R as Redis (rate-limit + sem-cache)
+    participant G as ai-prompt-guard / sanitization
+    participant P as ai-proxy-advanced
+    participant O as agent-orchestrator (L3)
+    participant T as OTel Collector
+
+    C->>K: HTTPS POST /chat/stream + Bearer JWT
+    K->>K: jwt plugin validates token, resolves iss=app_id
+    alt invalid JWT
+        K-->>C: 401 Unauthorized
+        K->>T: span (status=401)
+    end
+    K->>R: ai-rate-limiting-advanced: check + increment
+    alt over per-app budget (10 rps)
+        R-->>K: limit exceeded
+        K-->>C: 429 Too Many Requests
+        K->>T: span (status=429)
+    end
+    K->>G: request-transformer + ai-prompt-guard sanitize + scan
+    alt prompt-injection or PII violation
+        G-->>K: deny
+        K-->>C: 403 Forbidden
+        K->>T: span (status=403)
+    end
+    K->>R: ai-semantic-cache: embed prompt, lookup
+    alt cache hit
+        R-->>K: cached response
+        K-->>C: 200 (cached, X-Cache=HIT)
+        K->>T: span (cache_hit=true)
+    else cache miss
+        K->>P: route via Service DNS to L2
+        P->>O: HTTP POST /chat/stream (SSE upgrade)
+        Note over O: L3 work happens here (see L3 FLOW)
+        O-->>P: SSE stream chunks
+        P-->>K: SSE stream chunks
+        K-->>C: SSE stream chunks
+        K->>R: ai-semantic-cache: store response (TTL bounded)
+        K->>T: span (status=200, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens)
+    end

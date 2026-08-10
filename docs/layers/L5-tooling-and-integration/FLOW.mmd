@@ -1,0 +1,48 @@
+%% L5 — Tooling and Integration: tool invocation through CubeSandbox
+sequenceDiagram
+    autonumber
+    participant A as Agent (L3)
+    participant R as mcp-sandbox-runner
+    participant REG as mcp-registry
+    participant RD as Redis (idempotency)
+    participant CM as CubeMaster
+    participant CL as Cubelet on KVM node
+    participant VM as Sandbox microVM
+    participant VS as CubeVS (eBPF egress policy)
+    participant L4 as memory-svc (L4)
+    participant L7 as OTel Collector (L7)
+
+    A->>R: POST /tools/invoke (tool_id, input, deadline, idem_key)
+    R->>RD: lookup idempotency_key
+    alt cached result
+        RD-->>R: cached result
+        R-->>A: 200 (X-Idempotent=HIT)
+        R->>L7: span tool.invoke (cache_hit=true)
+    end
+
+    R->>REG: GET /manifests/{tool_id}@{version}
+    REG-->>R: manifest (schema, resource budget, egress policy)
+    R->>R: validate input against schema
+    R->>R: check workload tool allowlist (Agent CRD)
+    alt validation fails
+        R-->>A: 400 (validation error)
+        R->>L7: span tool.invoke (status=400)
+    end
+
+    R->>CM: createSandbox (E2B-compatible, template=tool)
+    CM->>CL: schedule on KVM node
+    CL->>VM: launch microVM (RustVMM, <60ms cold start)
+    VM-->>CM: ready
+    CM-->>R: sandbox_id, exec_endpoint
+
+    R->>VS: apply egress policy from manifest
+    R->>VM: exec (via E2B SDK)
+    Note over VM: runs with CPU/mem limits;<br/>deadline enforced by runner
+    VM-->>R: output (stdout, stderr, files, exit)
+
+    R->>L4: persist artifacts as memory handles (if any)
+    R->>CM: reapSandbox
+    R->>RD: store (idem_key, result_hash) TTL=deadline
+    R-->>A: 200 result envelope
+    R->>L7: span tool.invoke (gen_ai-extension attrs: tool_id, duration, exit_code)
+    R->>L7: audit event audit.tool.{tool_id} (input_hash, output_hash)

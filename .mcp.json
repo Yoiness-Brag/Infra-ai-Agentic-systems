@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "ruflo": {
+      "type": "stdio",
+      "command": "ruflo",
+      "args": [
+        "mcp",
+        "start"
+      ],
+      "env": {
+        "HF_HOME": "/home/agentos/.cache/huggingface",
+        "TRANSFORMERS_CACHE": "/home/agentos/.cache/huggingface/transformers"
+      }
+    }
+  }
+}

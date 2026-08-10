@@ -1,0 +1,9 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: mcp-graphiti-memory
+  namespace: kagent
+spec:
+  description: Graphiti-on-FalkorDB temporal memory MCP tool server — runs in ai-platform.
+  protocol: STREAMABLE_HTTP
+  url: http://mcp-graphiti-memory.ai-platform:3002/mcp

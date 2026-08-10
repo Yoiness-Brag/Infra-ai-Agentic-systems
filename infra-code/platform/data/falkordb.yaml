@@ -1,0 +1,184 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falkordb
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: falkordb
+    app: falkordb
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: graph-memory
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: falkordb
+  ports:
+    - name: resp
+      port: 6379
+      targetPort: resp
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: falkordb
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/part-of: ai-platform
+    app.kubernetes.io/component: graph-memory
+spec:
+  serviceName: falkordb
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falkordb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: falkordb
+        app: falkordb
+        app.kubernetes.io/part-of: ai-platform
+        app.kubernetes.io/component: graph-memory
+    spec:
+      priorityClassName: platform-data
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: falkordb
+          image: falkordb/falkordb:v4.2.2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FALKORDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: falkordb-auth
+                  key: FALKORDB_PASSWORD
+                  optional: true
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              COMMON="--protected-mode no --dir /data
+                --appendonly yes --appendfsync everysec
+                --appendfilename appendonly.aof --dbfilename dump.rdb
+                --save 900 1 --save 300 10
+                --maxmemory 512mb --maxmemory-policy noeviction
+                --loadmodule /FalkorDB/bin/src/falkordb.so
+                THREAD_COUNT 2 CACHE_SIZE 25
+                MAX_QUEUED_QUERIES 25 TIMEOUT 1000 RESULTSET_SIZE 10000"
+              if [ -n "$FALKORDB_PASSWORD" ]; then
+                exec redis-server $COMMON --requirepass "$FALKORDB_PASSWORD"
+              else
+                exec redis-server $COMMON
+              fi
+          ports:
+            - name: resp
+              containerPort: 6379
+              protocol: TCP
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'if [ -n "$FALKORDB_PASSWORD" ]; then redis-cli -a "$FALKORDB_PASSWORD" --no-auth-warning PING; else redis-cli PING; fi | grep -q PONG'
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'if [ -n "$FALKORDB_PASSWORD" ]; then redis-cli -a "$FALKORDB_PASSWORD" --no-auth-warning PING; else redis-cli PING; fi | grep -q PONG'
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'if [ -n "$FALKORDB_PASSWORD" ]; then redis-cli -a "$FALKORDB_PASSWORD" --no-auth-warning PING; else redis-cli PING; fi | grep -q PONG'
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: falkordb
+          app.kubernetes.io/part-of: ai-platform
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: falkordb-allow-ingress
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/part-of: ai-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: falkordb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-backend
+        - podSelector:
+            matchLabels:
+              app: mcp-graphiti-memory
+      ports:
+        - protocol: TCP
+          port: 6379
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
+      ports:
+        - protocol: TCP
+          port: 6379

@@ -1,0 +1,110 @@
+%% C4 Container diagram for Infra-ai-Agentic-systems
+%% Level: Container. Audience: engineering org.
+%% Updated to reflect Grafana Alloy + Pyroscope (ADR-0006)
+C4Container
+    title Container view: Infra-ai-Agentic-systems platform
+
+    Person(caller, "External caller", "Application, user, or peer A2A agent")
+    System_Ext(llm_apis, "LLM providers", "OpenAI, Anthropic, Gemini, GLM, Kimi 2, Ollama (local)")
+    System_Ext(a2a_peers, "External A2A agents", "Linux Foundation A2A protocol")
+
+    System_Boundary(platform, "Infra-ai-Agentic-systems platform (K3s cluster)") {
+
+        Container_Boundary(L1, "L1 — Interface and Entry") {
+            Container(kong, "Kong AI Gateway", "Kong 3.8+ OSS", "JWT, rate limit, semantic cache, AI guardrails, ai-proxy-advanced")
+        }
+
+        Container_Boundary(L2, "L2 — Orchestration and Control Plane") {
+            Container(nats, "NATS JetStream", "NATS 2.10", "Durable subjects, R3, KEDA scaler source")
+            Container(keda, "KEDA", "KEDA 2.x", "Scales workers on JetStream consumer lag")
+        }
+
+        Container_Boundary(L3, "L3 — Agent Runtime") {
+            Container(kagent, "kagent controller", "Go, CNCF Sandbox", "Agent CRDs, ToolServer CRDs, prompt templates; 3-replica HA")
+            Container(orch, "agent-orchestrator", "FastAPI + LangGraph", "Lead agent, plans, dispatches subtasks")
+            Container(worker, "agent-worker", "FastAPI + LangGraph", "Subagent, KEDA-scaled")
+            Container(a2a, "a2a-adapter", "Python", "Agent Card, JSON-RPC tasks")
+        }
+
+        Container_Boundary(L4, "L4 — Context and Memory") {
+            Container(memsvc, "memory-svc", "FastAPI", "Unified memory API with hybrid RAG (RRF)")
+            Container(rerank, "rerank-svc", "Cross-encoder", "bge-reranker-v2-m3 default")
+            Container(sesssvc, "session-svc", "FastAPI", "Conversation compaction")
+            ContainerDb(pg, "Postgres", "PG 16 + pgvector + CNPG", "Workflow checkpoints, RLS app data")
+            ContainerDb(qdrant, "Qdrant", "Qdrant 1.x", "Vector store, hybrid dense+sparse")
+            ContainerDb(falkor, "FalkorDB", "Redis-based graph", "Graphiti temporal KG")
+            ContainerDb(redis, "Redis", "Redis 7", "Short-term + idempotency + semantic cache")
+        }
+
+        Container_Boundary(L5, "L5 — Tooling and Integration") {
+            Container(mcpreg, "mcp-registry", "FastAPI", "MCP tool catalog")
+            Container(mcprun, "mcp-sandbox-runner", "FastAPI + E2B SDK", "Invokes tools in CubeSandbox")
+            Container(cube, "CubeSandbox cluster", "RustVMM + KVM", "CubeMaster, Cubelet, CubeProxy, CubeVS, CubeShim")
+        }
+
+        Container_Boundary(L6, "L6 — Safety, Policy and Governance") {
+            Container(opa, "OPA Gatekeeper", "Open Policy Agent", "K8s admission policies")
+            Container(cert, "cert-manager", "cert-manager", "TLS issuance")
+        }
+
+        Container_Boundary(L7, "L7 — Observability, Reliability and Optimization") {
+            Container(alloy, "Grafana Alloy", "OTel Collector distro, clustered 3-replica", "Unified: OTLP receive + Prometheus scrape + Loki push + Pyroscope")
+            ContainerDb(mimir, "Mimir", "Grafana Mimir + Ruler", "Metrics + alerting")
+            ContainerDb(loki, "Loki", "Grafana Loki", "Logs")
+            ContainerDb(tempo, "Tempo", "Grafana Tempo", "Traces")
+            ContainerDb(pyro, "Pyroscope", "Grafana Pyroscope", "Continuous profiles")
+            Container(grafana, "Grafana", "Grafana 10+", "Dashboards: ops + AI observability")
+            Container(langfuse, "Langfuse v3", "Web + Worker", "Prompt traces, eval scores")
+            ContainerDb(clickhouse, "ClickHouse", "ClickHouse 24+", "Langfuse OLAP + audit")
+            Container(eval, "eval-svc", "FastAPI", "5 online LLM-as-judge metrics + harness composition (DeepEval, Promptfoo, Ragas, Inspect AI)")
+        }
+    }
+
+    Rel(caller, kong, "HTTPS + Bearer JWT", "HTTPS / SSE")
+    Rel(a2a_peers, a2a, "A2A task delegation", "JSON-RPC 2.0 / SSE")
+
+    Rel(kong, orch, "Routes /chat/*", "HTTP / SSE")
+    Rel(kong, llm_apis, "Egress LLM via ai-proxy-advanced", "HTTPS")
+
+    Rel(orch, nats, "Publishes subtasks", "NATS")
+    Rel(worker, nats, "Consumes subtasks (KEDA-scaled)", "NATS")
+    Rel(keda, nats, "Reads consumer lag", "NATS")
+
+    Rel(kagent, orch, "Reconciles Agent CRDs", "K8s API")
+    Rel(kagent, worker, "Reconciles Agent CRDs", "K8s API")
+
+    Rel(orch, memsvc, "Read/write memory + /retrieve", "HTTP")
+    Rel(worker, memsvc, "Read/write memory + /retrieve", "HTTP")
+    Rel(memsvc, rerank, "Top-50 → Top-K", "HTTP")
+    Rel(memsvc, falkor, "Cypher", "Redis protocol")
+    Rel(memsvc, qdrant, "Hybrid search (dense+sparse, RRF)", "gRPC")
+    Rel(memsvc, redis, "Short-term + dedup", "RESP")
+    Rel(orch, pg, "LangGraph checkpoints", "Postgres wire")
+    Rel(memsvc, sesssvc, "Compaction", "HTTP")
+
+    Rel(worker, mcpreg, "Lookup manifest", "HTTP")
+    Rel(worker, mcprun, "Invoke tool", "HTTP")
+    Rel(mcprun, cube, "Create sandbox / exec", "E2B-compatible HTTP")
+
+    Rel(opa, kagent, "Admission webhook", "K8s admission")
+    Rel(cert, kong, "Issues TLS", "ACME / CRD")
+
+    Rel(orch, alloy, "OTLP traces / metrics / logs / profiles", "OTLP / gRPC")
+    Rel(worker, alloy, "OTLP", "OTLP / gRPC")
+    Rel(memsvc, alloy, "OTLP", "OTLP / gRPC")
+    Rel(mcprun, alloy, "OTLP", "OTLP / gRPC")
+    Rel(kong, alloy, "OTLP", "OTLP / gRPC")
+
+    Rel(alloy, mimir, "Metrics", "Prometheus remote-write")
+    Rel(alloy, loki, "Logs", "Loki push")
+    Rel(alloy, tempo, "Traces", "OTLP")
+    Rel(alloy, pyro, "Profiles", "Pyroscope native")
+    Rel(alloy, langfuse, "GenAI spans", "OTLP")
+
+    Rel(grafana, mimir, "PromQL", "HTTP")
+    Rel(grafana, loki, "LogQL", "HTTP")
+    Rel(grafana, tempo, "TraceQL", "HTTP")
+    Rel(grafana, pyro, "Profile queries", "HTTP")
+
+    Rel(langfuse, clickhouse, "Persists traces, scores", "ClickHouse")
+    Rel(eval, langfuse, "Reads traces, writes scores", "HTTP")

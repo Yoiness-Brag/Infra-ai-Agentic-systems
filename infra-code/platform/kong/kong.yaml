@@ -1,0 +1,167 @@
+_format_version: "3.0"
+_transform: true
+
+consumers:
+  - username: mvp-app
+    jwt_secrets:
+      - key: mvp-app
+        algorithm: HS256
+        secret: "${JWT_SECRET}"
+
+services:
+  - name: agent-backend
+    url: http://agent-backend.ai-platform:8000
+    connect_timeout: 5000
+    write_timeout: 180000
+    read_timeout: 180000
+    retries: 0
+    routes:
+      - name: health
+        paths:
+          - /healthz
+          - /readyz
+        strip_path: false
+        protocols:
+          - http
+        methods:
+          - GET
+
+      - name: api-docs
+        paths:
+          - /docs
+          - /redoc
+          - /openapi.json
+        strip_path: false
+        protocols:
+          - http
+        methods:
+          - GET
+
+      - name: chat
+        paths:
+          - /chat
+        strip_path: false
+        protocols:
+          - http
+        methods:
+          - POST
+          - OPTIONS
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify:
+                - exp
+              header_names:
+                - authorization
+              run_on_preflight: false
+          - name: rate-limiting
+            config:
+              minute: 120
+              policy: local
+              limit_by: consumer
+          - name: request-size-limiting
+            config:
+              allowed_payload_size: 1
+              size_unit: megabytes
+
+      - name: documents
+        paths:
+          - /documents
+        strip_path: false
+        protocols:
+          - http
+        methods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify:
+                - exp
+              header_names:
+                - authorization
+              run_on_preflight: false
+          - name: rate-limiting
+            config:
+              minute: 30
+              policy: local
+              limit_by: consumer
+          - name: request-size-limiting
+            config:
+              allowed_payload_size: 25
+              size_unit: megabytes
+
+  - name: gemini-egress
+    url: https://generativelanguage.googleapis.com
+    connect_timeout: 5000
+    write_timeout: 120000
+    read_timeout: 120000
+    retries: 1
+    routes:
+      - name: llm-gemini
+        paths:
+          - /llm/gemini
+        strip_path: true
+        protocols:
+          - http
+        methods:
+          - POST
+          - OPTIONS
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify:
+                - exp
+              header_names:
+                - authorization
+              run_on_preflight: false
+          - name: ai-proxy
+            config:
+              route_type: llm/v1/chat
+              auth:
+                param_name: key
+                param_value: "{vault://env/GOOGLE_API_KEY}"
+                param_location: query
+              model:
+                provider: gemini
+                name: gemini-2.5-flash
+              logging:
+                log_statistics: true
+                log_payloads: false
+
+plugins:
+  - name: prometheus
+    config:
+      per_consumer: false
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      ai_metrics: true
+  - name: correlation-id
+    config:
+      header_name: X-Request-Id
+      generator: uuid
+      echo_downstream: true
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - DELETE
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+        - X-Request-Id
+      exposed_headers:
+        - X-Request-Id
+      credentials: false
+      max_age: 3600

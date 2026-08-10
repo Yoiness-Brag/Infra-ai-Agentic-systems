@@ -1,0 +1,54 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: infra-ai-mvp
+
+servers: 1
+agents: 0
+
+image: rancher/k3s:v1.33.13-k3s2
+
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  - port: 8081:30081
+    nodeFilters:
+      - server:0
+  - port: 3000:30300
+    nodeFilters:
+      - server:0
+  - port: 3001:30301
+    nodeFilters:
+      - server:0
+  - port: 9001:30901
+    nodeFilters:
+      - server:0
+
+options:
+  k3d:
+    wait: true
+    timeout: "600s"
+    disableLoadbalancer: false
+  k3s:
+    extraArgs:
+      - arg: "--disable=traefik"
+        nodeFilters:
+          - server:*
+      - arg: "--kubelet-arg=system-reserved=memory=512Mi,cpu=250m"
+        nodeFilters:
+          - server:*
+      - arg: "--kubelet-arg=eviction-hard=memory.available<400Mi,nodefs.available<10%"
+        nodeFilters:
+          - server:*
+      - arg: "--kubelet-arg=image-gc-high-threshold=70"
+        nodeFilters:
+          - server:*
+      - arg: "--kubelet-arg=image-gc-low-threshold=60"
+        nodeFilters:
+          - server:*
+  runtime:
+    serversMemory: "8g"
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

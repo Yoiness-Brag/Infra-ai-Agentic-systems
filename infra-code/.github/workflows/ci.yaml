@@ -1,0 +1,203 @@
+name: infra-code CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["infra-code/**", ".github/workflows/**"]
+  pull_request:
+    paths: ["infra-code/**", ".github/workflows/**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  KUBECONFORM_VERSION: v0.8.0
+  KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+  KONG_CHART_VERSION: 3.4.1
+  KAGENT_CHART_VERSION: 0.9.12
+
+defaults:
+  run:
+    working-directory: infra-code
+
+jobs:
+  images:
+    name: build / scan / push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [agent-backend, mcp-web-search, mcp-graphiti-memory]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          short="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          echo "short=${short}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "${short}" | grep -Eq '^[a-f0-9]{7}$' \
+            || { echo "tag '${short}' violates ^[a-f0-9]{7}\$"; exit 1; }
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build (load locally, do not push yet)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: infra-code/services/${{ matrix.service }}
+          push: false
+          load: true
+          tags: ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.short }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Trivy scan (blocking, before any push)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.short }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push scanned image
+        if: github.event_name == 'push'
+        run: docker push "${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.short }}"
+
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+        with:
+          version: v1.33.4
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.21.3
+
+      - name: Install kubeconform (checksum-verified)
+        run: |
+          curl -sSfLo /tmp/kubeconform.tgz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tgz" | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tgz -C /tmp kubeconform
+          sudo install -m0755 /tmp/kubeconform /usr/local/bin/kubeconform
+
+      - name: kustomize build + kubeconform
+        run: |
+          fail=0
+          for d in platform/foundation platform/data platform/kong/k8s platform/observability \
+                   platform/kagent/crs platform/kagent/agent platform/keda/k8s \
+                   services/agent-backend/k8s services/mcp-web-search/k8s services/mcp-graphiti-memory/k8s; do
+            echo "== $d"
+            kubectl kustomize "$d" > /tmp/out.yaml || { echo "kustomize FAILED: $d"; fail=1; continue; }
+            kubeconform -strict -ignore-missing-schemas -summary /tmp/out.yaml || fail=1
+          done
+          exit $fail
+
+      - name: helm template (Kong + kagent)
+        run: |
+          helm repo add kong https://charts.konghq.com >/dev/null
+          helm repo update >/dev/null
+          helm template kong kong/kong --version "${KONG_CHART_VERSION}" \
+            -n ai-gateway -f platform/kong/values.yaml > /dev/null
+          helm template kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent \
+            --version "${KAGENT_CHART_VERSION}" -n kagent -f platform/kagent/values.yaml > /dev/null
+
+  gitops-lint:
+    name: gitops-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Applications must reference real paths, pinned revisions, allowed repos
+        run: |
+          fail=0
+          repos="$(yq -r '.spec.sourceRepos[]' platform/argocd/project.yaml)"
+
+          for f in platform/argocd/root.yaml platform/argocd/applications/*.yaml; do
+            name="$(basename "$f")"
+
+            while read -r rev; do
+              [ -z "$rev" ] && continue
+              if [ "$rev" = "HEAD" ]; then echo "$name: targetRevision HEAD is not pinned"; fail=1; fi
+            done < <(yq -r '[.spec.source.targetRevision // "", (.spec.sources[]?.targetRevision // "")] | .[]' "$f")
+
+            while read -r p; do
+              [ -z "$p" ] && continue
+              rel="${p#infra-code/}"
+              [ -e "$rel" ] || { echo "$name: source path does not exist: $p"; fail=1; }
+            done < <(yq -r '[.spec.source.path // "", (.spec.sources[]?.path // "")] | .[] | select(. != "")' "$f")
+
+            while read -r u; do
+              [ -z "$u" ] && continue
+              echo "$repos" | grep -qxF "$u" || { echo "$name: repoURL not in AppProject.sourceRepos: $u"; fail=1; }
+            done < <(yq -r '[.spec.source.repoURL // "", (.spec.sources[]?.repoURL // "")] | .[] | select(. != "")' "$f")
+          done
+          exit $fail
+
+      - name: No :latest and no mutable dev tags in manifests
+        run: |
+          if grep -rnE 'image:.*:latest' platform services --include='*.yaml'; then
+            echo "':latest' image tags are forbidden"; exit 1
+          fi
+          echo "ok"
+
+  python:
+    name: python
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [agent-backend, mcp-web-search, mcp-graphiti-memory]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pipx install uv==0.11.21
+
+      - name: Lockfile must be current
+        working-directory: infra-code/services/${{ matrix.service }}
+        run: uv lock --check
+
+      - name: Sync
+        working-directory: infra-code/services/${{ matrix.service }}
+        run: uv sync --frozen
+
+      - name: Ruff
+        working-directory: infra-code/services/${{ matrix.service }}
+        run: uv run ruff check .
+
+      - name: Pytest
+        working-directory: infra-code/services/${{ matrix.service }}
+        run: |
+          if [ -d tests ]; then
+            uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=60
+          else
+            echo "no tests/ for ${{ matrix.service }} — skipping"
+          fi

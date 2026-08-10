@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-backend
+  namespace: ai-platform
+  labels:
+    app.kubernetes.io/name: agent-backend
+    app: agent-backend
+    app.kubernetes.io/part-of: infra-ai-mvp
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-backend
+        app: agent-backend
+        app.kubernetes.io/part-of: infra-ai-mvp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: agent-backend
+      automountServiceAccountToken: false
+      priorityClassName: platform-core
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-backend
+          image: mvp/agent-backend:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: KAGENT_AGENT_A2A_URL
+              value: "http://kagent-controller.kagent:8083/api/a2a/kagent/mvp-agent/"
+            - name: JWT_ISS
+              value: "mvp-app"
+            - name: X_WORKLOAD_APP
+              value: "mvp-app"
+            - name: POSTGRES_HOST
+              value: "postgres.ai-platform"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: FALKORDB_HOST
+              value: "falkordb.ai-platform"
+            - name: FALKORDB_PORT
+              value: "6379"
+            - name: MINIO_ENDPOINT
+              value: "minio.ai-platform:9000"
+            - name: MINIO_BUCKET
+              value: "documents"
+            - name: MINIO_SECURE
+              value: "false"
+            - name: CHECKPOINT_BACKEND
+              value: "falkordb"
+            - name: REQUEST_BUDGET_SECONDS
+              value: "150"
+            - name: A2A_TIMEOUT_SECONDS
+              value: "45"
+            - name: A2A_MAX_RETRIES
+              value: "1"
+            - name: HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
+          envFrom:
+            - secretRef:
+                name: jwt-secret
+            - secretRef:
+                name: postgres-creds
+            - secretRef:
+                name: falkordb-auth
+                optional: true
+            - secretRef:
+                name: gemini-api
+            - secretRef:
+                name: minio-creds
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 40
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "448Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "768Mi"
+              ephemeral-storage: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi

@@ -1,0 +1,99 @@
+providers:
+  default: gemini
+  gemini:
+    provider: Gemini
+    model: "gemini-2.5-flash"
+    apiKeySecretRef: gemini-api
+    apiKeySecretKey: GOOGLE_API_KEY
+
+controller:
+  replicas: 1
+  loglevel: "info"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: "2"
+      memory: 448Mi
+  metrics:
+    enabled: true
+    bindAddress: ":8080"
+    secureServing: false
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: /metrics
+
+database:
+  postgres:
+    vectorEnabled: false
+    bundled:
+      enabled: true
+      storage: 500Mi
+      storageClassName: local-path
+      resources:
+        requests:
+          cpu: 50m
+          memory: 192Mi
+        limits:
+          cpu: 500m
+          memory: 320Mi
+
+ui:
+  replicas: 0
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 192Mi
+
+kmcp:
+  enabled: false
+
+substrate:
+  enabled: false
+
+kagent-tools:
+  enabled: false
+
+k8s-agent:
+  enabled: false
+
+kgateway-agent:
+  enabled: false
+
+istio-agent:
+  enabled: false
+
+promql-agent:
+  enabled: false
+
+observability-agent:
+  enabled: false
+
+argo-rollouts-agent:
+  enabled: false
+
+helm-agent:
+  enabled: false
+
+cilium-policy-agent:
+  enabled: false
+
+cilium-manager-agent:
+  enabled: false
+
+cilium-debug-agent:
+  enabled: false
+
+grafana-mcp:
+  enabled: false
+
+querydoc:
+  enabled: false
+
+oauth2-proxy:
+  enabled: false

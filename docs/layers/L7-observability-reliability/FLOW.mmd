@@ -1,0 +1,79 @@
+%% L7 — Observability: Alloy unified pipeline + eval feedback loop
+flowchart LR
+    subgraph EMIT[Emit sources L1 to L6]
+        S_K[Kong L1]
+        S_O[agent-orchestrator L3]
+        S_W[agent-worker L3]
+        S_M[memory-svc L4]
+        S_R[mcp-sandbox-runner L5]
+        S_K8S[kube-state-metrics + node-exporter]
+    end
+
+    subgraph PIPE[Grafana Alloy clustered 3-replica]
+        ALLOY[Alloy unified collector<br/>OTLP receive + Prometheus scrape<br/>Loki push + Pyroscope native]
+        OTTL[OTTL processors<br/>PII redaction + sampling]
+        FAN[Native exporters]
+    end
+
+    subgraph OPS[Ops backends]
+        MIM[(Mimir<br/>metrics + Mimir Ruler alerting)]
+        LOK[(Loki<br/>logs)]
+        TEM[(Tempo<br/>traces)]
+        PYR[(Pyroscope<br/>profiles)]
+        GRAF[Grafana dashboards]
+    end
+
+    subgraph AI[AI engineering backends]
+        LFW[Langfuse Web]
+        LFWORKER[Langfuse Worker]
+        CHX[(ClickHouse<br/>traces + audit)]
+        PGL[(Postgres Langfuse meta)]
+        RDL[(Redis Langfuse queue)]
+        MINIO[(MinIO S3)]
+    end
+
+    subgraph EVAL[Harness composition]
+        EVS[eval-svc]
+        ONLINE[Online: 5 LLM-as-judge metrics on live traces]
+        OFFLINE[Offline: DeepEval + Ragas + Inspect AI + Promptfoo in CI]
+        DATASETS[evals/datasets golden sets]
+        PROMPTS[5 judge prompts]
+    end
+
+    S_K -->|OTLP gRPC| ALLOY
+    S_O -->|OTLP| ALLOY
+    S_W -->|OTLP| ALLOY
+    S_M -->|OTLP| ALLOY
+    S_R -->|OTLP| ALLOY
+    S_K8S -->|Prometheus scrape native| ALLOY
+
+    ALLOY --> OTTL --> FAN
+
+    FAN -->|Prometheus remote-write| MIM
+    FAN -->|Loki push| LOK
+    FAN -->|OTLP| TEM
+    FAN -->|Pyroscope protocol| PYR
+    FAN -->|OTLP GenAI spans| LFW
+
+    GRAF --> MIM
+    GRAF --> LOK
+    GRAF --> TEM
+    GRAF --> PYR
+
+    LFW --> LFWORKER
+    LFWORKER --> CHX
+    LFW --> PGL
+    LFW --> RDL
+    LFW --> MINIO
+
+    EVS -->|read traces| LFW
+    EVS -->|write scores| LFW
+    ONLINE --> EVS
+    OFFLINE --> EVS
+    DATASETS --> OFFLINE
+    PROMPTS --> EVS
+
+    classDef store fill:#e8f0fe,stroke:#1a73e8,color:#000
+    classDef alloy fill:#fff4e6,stroke:#e8590c,color:#000
+    class MIM,LOK,TEM,PYR,CHX,PGL,RDL,MINIO store
+    class ALLOY alloy

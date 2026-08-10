@@ -1,0 +1,9 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: mcp-web-search
+  namespace: kagent
+spec:
+  description: Web search MCP tool server (fresh facts) — runs in ai-platform.
+  protocol: STREAMABLE_HTTP
+  url: http://mcp-web-search.ai-platform:3001/mcp
